@@ -1,3 +1,5 @@
+// (C) Xrisofor
+
 #include "MyPluginWizardDefinition.h"
 
 #include "HelloNeighborModStyle.h"

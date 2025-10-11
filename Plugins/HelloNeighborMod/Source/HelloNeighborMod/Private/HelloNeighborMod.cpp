@@ -1,4 +1,5 @@
-// HelloNeighborMod.cpp
+// (C) Xrisofor
+
 #include "HelloNeighborMod.h"
 
 #include "DesktopPlatformModule.h"

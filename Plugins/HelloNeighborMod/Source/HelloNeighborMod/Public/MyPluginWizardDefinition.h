@@ -1,3 +1,5 @@
+// (C) Xrisofor
+
 #pragma once
 
 #include "IPluginWizardDefinition.h"

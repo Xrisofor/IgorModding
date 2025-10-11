@@ -6,15 +6,13 @@ The modification system was developed by Igor Belov or one of the tinyBuild prog
 
 ## Features
 
-This modding system includes the main components and plugins from Hello Neighbor, with additional classes to help you create and run mods:
+> This modding system replicates the core components and plugins from the Hello Neighbor mod kit, allowing you to create and run mods in the same way.
 
-- **GameInstance** with `ModKit` singleton accessible via `GetModKit()`.
-- **UModKit** class - core mod manager.
-- **Hello Neighbor Mod Plugin** - provides base functionality for modding.
-- **ASosed** – a simple base character class to be used as a foundation for mods.
-- **ANeighborStart** – specifies which Neighbor should be spawned in the game, useful for mod-controlled gameplay.
-
-With these components, you can create, load, and manage mods similarly to the original Hello Neighbor mod kit.
+- **GameInstance** – with `ModKit` singleton accessible via `GetModKit()`.
+- **UModKit** – core mod manager class for handling mods.
+- **Hello Neighbor Mod Plugin** – base plugin for modding support.
+- **ASosed** – simple base character class, used as foundation for mods.
+- **ANeighborStart** – determines which Neighbor to spawn, allowing mod-controlled gameplay.
 
 <div align="center">
     <img src="Resources/GameInstance.png" /><br />
@@ -46,3 +44,19 @@ To correctly build the game with the mod system, follow these steps in **Project
 | Build & Cook | Release / DLC / Patching Settings | Advanced Settings | Package, Archive & Deploy |
 |:-:|:-:|:-:|:-:|
 | ![BuildCook](Resources/ProjectLauncher1.png) | ![ReleaseDLC](Resources/ProjectLauncher2.png) | ![Advanced](Resources/ProjectLauncher3.png) | ![Package](Resources/ProjectLauncher4.png) |
+
+## Creating a Mod with Hello Neighbor Mod
+
+The plugin adds two new buttons in the editor:
+
+- **Create Mod** – opens a window for creating new mods.  
+  - Uses a custom `IPluginWizardDefinition` with mod-specific settings and templates.  
+  - Replicates the original Hello Neighbor Mod Kit workflow for creating mods.  
+
+- **Package Mod** – a dropdown showing all available mods that can be packaged.  
+  - Allows you to easily build and distribute your mods from within the editor.
+
+<div align="center">
+    <img src="Resources/NewGameMod.png" /><br />
+    Create Mod window
+</div>

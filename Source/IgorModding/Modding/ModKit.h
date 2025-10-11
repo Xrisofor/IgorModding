@@ -83,7 +83,7 @@ struct FModNeighbor
     TSoftClassPtr<class ASosed> NeighborClass;
 };
 
-UCLASS(Blueprintable)
+UCLASS()
 class IGORMODDING_API UModKit : public UObject
 {
     GENERATED_BODY()

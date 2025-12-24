@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+// (C) Xrisofor
 
 #include "HelloNeighborModStyle.h"
 #include "Styling/SlateStyleRegistry.h"

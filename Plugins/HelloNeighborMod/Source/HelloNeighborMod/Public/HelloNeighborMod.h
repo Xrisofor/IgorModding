@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+// (C) Xrisofor
 
 #pragma once
 
@@ -8,13 +8,15 @@
 class FToolBarBuilder;
 class FMenuBuilder;
 
-class FHelloNeighborModModule : public IModuleInterface
+static const FName HelloNeighborCreateNewModTabName("NewGameMod");
+
+class HELLONEIGHBORMOD_API FHelloNeighborModModule : public IModuleInterface
 {
 public:
 	virtual void StartupModule() override;
 	virtual void ShutdownModule() override;
 	
-	void PluginButtonClicked();
+	void PluginButtonClicked() { FGlobalTabmanager::Get()->TryInvokeTab(HelloNeighborCreateNewModTabName); };
 	
 private:
 	void RegisterMenus();

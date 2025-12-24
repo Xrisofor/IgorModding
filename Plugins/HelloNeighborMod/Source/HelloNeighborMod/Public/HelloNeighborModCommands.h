@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+// (C) Xrisofor
 
 #pragma once
 
@@ -6,7 +6,7 @@
 #include "Framework/Commands/Commands.h"
 #include "HelloNeighborModStyle.h"
 
-class FHelloNeighborModCommands : public TCommands<FHelloNeighborModCommands>
+class HELLONEIGHBORMOD_API FHelloNeighborModCommands : public TCommands<FHelloNeighborModCommands>
 {
 public:
 	FHelloNeighborModCommands()

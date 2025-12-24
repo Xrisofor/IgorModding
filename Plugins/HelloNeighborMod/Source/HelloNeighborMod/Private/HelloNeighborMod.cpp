@@ -2,10 +2,10 @@
 
 #include "HelloNeighborMod.h"
 
-#include "DesktopPlatformModule.h"
 #include "HelloNeighborModStyle.h"
 #include "HelloNeighborModCommands.h"
-#include "Widgets/Docking/SDockTab.h"
+#include "HelloNeighborModSettings.h"
+#include "ModPluginWizardDefinition.h"
 
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SSpacer.h"
@@ -14,11 +14,13 @@
 #include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Images/SImage.h"
+#include "Widgets/Docking/SDockTab.h"
+
 #include "EditorStyleSet.h"
 #include "ToolMenus.h"
 #include "IPluginBrowser.h"
 #include "IUATHelperModule.h"
-#include "MyPluginWizardDefinition.h"
+
 #include "Framework/Docking/TabManager.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "Misc/Paths.h"
@@ -26,8 +28,6 @@
 #include "Interfaces/IPluginManager.h"
 
 #define LOCTEXT_NAMESPACE "FHelloNeighborModModule"
-
-static const FName HelloNeighborCreateNewModTabName("NewGameMod");
 
 void FHelloNeighborModModule::StartupModule()
 {
@@ -62,11 +62,6 @@ void FHelloNeighborModModule::ShutdownModule()
 
 	FHelloNeighborModCommands::Unregister();
 	FHelloNeighborModStyle::Shutdown();
-}
-
-void FHelloNeighborModModule::PluginButtonClicked()
-{
-	FGlobalTabmanager::Get()->TryInvokeTab(HelloNeighborCreateNewModTabName);
 }
 
 void FHelloNeighborModModule::RegisterMenus()
@@ -140,15 +135,25 @@ void FHelloNeighborModModule::PackageSelectedMod(FString ModName)
 	if (!Plugin.IsValid())
 		return;
 
+	UHelloNeighborModSettings* ModSettings = GetMutableDefault<UHelloNeighborModSettings>();
+	if (!ModSettings)
+	{
+		UE_LOG(LogTemp, Error, TEXT("Failed to retrieve Hello Neighbor Mod Settings"));
+		return;
+	}
+
+	FString BasedOnReleaseVersion = ModSettings->BasedOnReleaseVersion;
+
 	FString ProjectFullPath = FPaths::GetProjectFilePath();
 	FPaths::MakeStandardFilename(ProjectFullPath);
 
 	FString ProjectName = FPaths::GetBaseFilename(ProjectFullPath);
 
 	FString CommandLine = FString::Printf(
-		TEXT("BuildCookRun -project=\"%s\" -noP4 -clientconfig=Development -serverconfig=Development -nocompile -nocompileeditor -installed -ue4exe=UE4Editor-Cmd.exe -utf8output -platform=Win64 -targetplatform=Win64 -ini:Game:[/Script/UnrealEd.ProjectPackagingSettings]:BlueprintNativizationMethod=Disabled -cook -map= -unversionedcookedcontent -pak -dlcname=\"%s\" -DLCIncludeEngineContent -basedonreleaseversion=1.0 -stage"),
+		TEXT("BuildCookRun -project=\"%s\" -noP4 -clientconfig=Development -serverconfig=Development -nocompile -nocompileeditor -installed -ue4exe=UE4Editor-Cmd.exe -utf8output -platform=Win64 -targetplatform=Win64 -ini:Game:[/Script/UnrealEd.ProjectPackagingSettings]:BlueprintNativizationMethod=Disabled -cook -map= -unversionedcookedcontent -pak -dlcname=\"%s\" -DLCIncludeEngineContent -basedonreleaseversion=%s -stage"),
 		*ProjectFullPath,
-		*ModName);
+		*ModName,
+		*BasedOnReleaseVersion);
 
 #if PLATFORM_WINDOWS
 	FText PlatformName = LOCTEXT("PlatformName_Windows", "Windows");
@@ -228,7 +233,7 @@ void FHelloNeighborModModule::PackageSelectedMod(FString ModName)
 
 TSharedRef<SDockTab> FHelloNeighborModModule::OnSpawnPluginTab(const FSpawnTabArgs& SpawnTabArgs)
 {
-	TSharedPtr<IPluginWizardDefinition> WizardDefinition = MakeShareable(new FMyPluginWizardDefinition());
+	TSharedPtr<IPluginWizardDefinition> WizardDefinition = MakeShareable(new FModPluginWizardDefinition());
 	return IPluginBrowser::Get().SpawnPluginCreatorTab(SpawnTabArgs, WizardDefinition);
 }
 #undef LOCTEXT_NAMESPACE

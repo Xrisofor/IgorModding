@@ -1,11 +1,11 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+// (C) Xrisofor
 
 #pragma once
 
 #include "CoreMinimal.h"
 #include "Styling/SlateStyle.h"
 
-class FHelloNeighborModStyle
+class HELLONEIGHBORMOD_API FHelloNeighborModStyle
 {
 public:
 	static void Initialize();

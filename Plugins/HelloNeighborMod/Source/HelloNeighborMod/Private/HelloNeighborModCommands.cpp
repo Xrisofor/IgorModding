@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+// (C) Xrisofor
 
 #include "HelloNeighborModCommands.h"
 
@@ -6,8 +6,8 @@
 
 void FHelloNeighborModCommands::RegisterCommands()
 {
-	UI_COMMAND(NewModButton, "Create Mod", "Create a Game Mode", EUserInterfaceActionType::Button, FInputGesture());
-	UI_COMMAND(PackageModButton, "Package Mod", "Package the Mod", EUserInterfaceActionType::Button, FInputGesture());
+	UI_COMMAND(NewModButton, "Create Mod", "Create a Game Mode", EUserInterfaceActionType::Button, FInputChord());
+	UI_COMMAND(PackageModButton, "Package Mod", "Package the Mod", EUserInterfaceActionType::Button, FInputChord());
 }
 
 #undef LOCTEXT_NAMESPACE

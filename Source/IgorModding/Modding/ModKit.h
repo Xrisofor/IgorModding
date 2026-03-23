@@ -89,13 +89,16 @@ class IGORMODDING_API UModKit : public UObject
     GENERATED_BODY()
 
 public:
-    UModKit();
+    UModKit() { NumActiveMap = -1; NumActiveNeighbor = -1; };
     
     UFUNCTION()
     void FindMods();
 
     UFUNCTION(BlueprintCallable)
     FMod FindMod(const FString& ModName) const;
+
+    UFUNCTION(BlueprintCallable)
+    FString GetModsDirectory() const;
     
     UFUNCTION(BlueprintPure)
     TArray<FModMap> GetAllModMaps() const { return AllModMaps; }
@@ -128,6 +131,9 @@ public:
     void SetNumModNeighbor(int32 Num) { NumActiveNeighbor = Num; }
 
 private:
+    TArray<FString> ModFoldersQueue;
+    void ProcessNextMod();
+    
     TArray<FMod> AllMods;
     TArray<FModMap> AllModMaps;
     TArray<FModNeighbor> AllModNeighbors;

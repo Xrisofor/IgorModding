@@ -25,7 +25,7 @@ To correctly build the game with the mod system, follow these steps in **Project
 
 1. **Create a Custom Build Profile** - give it any name you like.
 2. **Build** - choose any build type.
-3. **Cook** - package the game for `WindowsNoEditor` (recommended).
+3. **Cook** - package the game for `WindowsNoEditor` (recommended) and `Android (ASTC)`.
 4. In **Cook → Release / DLC / Patching Settings**:
    - Enable **Create a release version of the game for distribution**.
    - Set **Name of the new release to create** (recommended: `1.0`).

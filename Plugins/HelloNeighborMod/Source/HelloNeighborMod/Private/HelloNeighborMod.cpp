@@ -70,7 +70,7 @@ void FHelloNeighborModModule::RegisterMenus()
 	UToolMenu* Toolbar = UToolMenus::Get()->ExtendMenu("LevelEditor.LevelEditorToolBar");
 	FToolMenuSection& Section = Toolbar->FindOrAddSection("PlayToolBar");
 
-	// Create Mod button
+	// Create Mod Button
 	FToolMenuEntry CreateModEntry = FToolMenuEntry::InitToolBarButton(FHelloNeighborModCommands::Get().NewModButton);
 	CreateModEntry.SetCommandList(CreateModCommand);
 	CreateModEntry.Icon = FSlateIcon(FHelloNeighborModStyle::Get().GetStyleSetName(), "HelloNeighborMod.CreateNewMod");
@@ -86,28 +86,6 @@ void FHelloNeighborModModule::RegisterMenus()
 	);
 	PackageModEntry.Icon = FSlateIcon(FHelloNeighborModStyle::Get().GetStyleSetName(), "HelloNeighborMod.PackageMod");
 	Section.AddEntry(PackageModEntry);
-}
-
-TSharedRef<SWidget> FHelloNeighborModModule::GenerateModListWidget()
-{
-	FMenuBuilder MenuBuilder(true, PackageModCommands);
-
-	TArray<FString> AllMods = GetAllMods();
-
-	for (const FString& ModName : AllMods)
-	{
-		FUIAction Action(FExecuteAction::CreateRaw(this, &FHelloNeighborModModule::PackageSelectedMod, ModName));
-		FSlateIcon ModIcon(FHelloNeighborModStyle::Get().GetStyleSetName(), "HelloNeighborMod.ModFolder");
-
-		MenuBuilder.AddMenuEntry(
-			FText::FromString(ModName), 
-			FText::FromString("Package this mod"), 
-			ModIcon, 
-			Action
-		);
-	}
-
-	return MenuBuilder.MakeWidget();
 }
 
 TArray<FString> FHelloNeighborModModule::GetAllMods()
@@ -129,43 +107,79 @@ TArray<FString> FHelloNeighborModModule::GetAllMods()
 	return AllMods;
 }
 
-void FHelloNeighborModModule::PackageSelectedMod(FString ModName)
+TSharedRef<SWidget> FHelloNeighborModModule::GenerateModListWidget()
 {
-	TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(ModName);
-	if (!Plugin.IsValid())
-		return;
+	FMenuBuilder MenuBuilder(true, PackageModCommands);
+	TArray<FString> AllMods = GetAllMods();
 
-	UHelloNeighborModSettings* ModSettings = GetMutableDefault<UHelloNeighborModSettings>();
-	if (!ModSettings)
+	for (const FString& ModName : AllMods)
 	{
-		UE_LOG(LogTemp, Error, TEXT("Failed to retrieve Hello Neighbor Mod Settings"));
-		return;
+		MenuBuilder.AddSubMenu(
+			FText::FromString(ModName),
+			FText::Format(LOCTEXT("PackageModTooltip", "Select platform to package {0}"), FText::FromString(ModName)),
+			FNewMenuDelegate::CreateRaw(this, &FHelloNeighborModModule::GeneratePlatformMenu, ModName),
+			false,
+			FSlateIcon(FHelloNeighborModStyle::Get().GetStyleSetName(), "HelloNeighborMod.ModFolder")
+		);
 	}
 
+	return MenuBuilder.MakeWidget();
+}
+
+void FHelloNeighborModModule::GeneratePlatformMenu(FMenuBuilder& MenuBuilder, FString ModName)
+{
+	const UHelloNeighborModSettings* Settings = GetDefault<UHelloNeighborModSettings>();
+	if (!Settings) return;
+	
+	for (const FBuildPlatform& Platform : Settings->SupportedPlatforms)
+	{
+		MenuBuilder.AddMenuEntry(
+			Platform.DisplayName,
+			Platform.Tooltip,
+			FSlateIcon(FEditorStyle::GetStyleSetName(), Platform.IconName),
+			FUIAction(FExecuteAction::CreateRaw(
+				this, 
+				&FHelloNeighborModModule::PackageSelectedMod, 
+				ModName, 
+				Platform.PlatformName, 
+				Platform.TargetFlavor
+			))
+		);
+	}
+}
+
+void FHelloNeighborModModule::PackageSelectedMod(FString ModName, FString TargetPlatform, FString CookFlavor)
+{
+	TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(ModName);
+	if (!Plugin.IsValid()) return;
+
+	UHelloNeighborModSettings* ModSettings = GetMutableDefault<UHelloNeighborModSettings>();
 	FString BasedOnReleaseVersion = ModSettings->BasedOnReleaseVersion;
 
-	FString ProjectFullPath = FPaths::GetProjectFilePath();
-	FPaths::MakeStandardFilename(ProjectFullPath);
-
+	FString ProjectFullPath = FPaths::ConvertRelativePathToFull(FPaths::GetProjectFilePath());
 	FString ProjectName = FPaths::GetBaseFilename(ProjectFullPath);
 
+	FString PlatformArgs = FString::Printf(TEXT("-platform=%s -targetplatform=%s"), *TargetPlatform, *TargetPlatform);
+	FString StageFolder = TargetPlatform; 
+	if (TargetPlatform == "Win64") StageFolder = TEXT("WindowsNoEditor");
+	else if (TargetPlatform == "Linux") StageFolder = TEXT("LinuxNoEditor");
+	
+	if (!CookFlavor.IsEmpty())
+	{
+		PlatformArgs += FString::Printf(TEXT(" -cookflavor=%s"), *CookFlavor);
+		StageFolder += FString::Printf(TEXT("_%s"), *CookFlavor);
+	}
+	
 	FString CommandLine = FString::Printf(
-		TEXT("BuildCookRun -project=\"%s\" -noP4 -clientconfig=Development -serverconfig=Development -nocompile -nocompileeditor -installed -ue4exe=UE4Editor-Cmd.exe -utf8output -platform=Win64 -targetplatform=Win64 -ini:Game:[/Script/UnrealEd.ProjectPackagingSettings]:BlueprintNativizationMethod=Disabled -cook -map= -unversionedcookedcontent -pak -dlcname=\"%s\" -DLCIncludeEngineContent -basedonreleaseversion=%s -stage"),
+		TEXT("BuildCookRun -project=\"%s\" -noP4 -clientconfig=Development -nocompile -nocompileeditor -installed -ue4exe=UE4Editor-Cmd.exe -utf8output %s -ini:Game:[/Script/UnrealEd.ProjectPackagingSettings]:BlueprintNativizationMethod=Disabled -cook -unversionedcookedcontent -pak -dlcname=\"%s\" -DLCIncludeEngineContent -basedonreleaseversion=%s -stage -archive"),
 		*ProjectFullPath,
+		*PlatformArgs,
 		*ModName,
 		*BasedOnReleaseVersion);
 
-#if PLATFORM_WINDOWS
-	FText PlatformName = LOCTEXT("PlatformName_Windows", "Windows");
-#elif PLATFORM_MAC
-	FText PlatformName = LOCTEXT("PlatformName_Mac", "Mac");
-#elif PLATFORM_LINUX
-	FText PlatformName = LOCTEXT("PlatformName_Linux", "Linux");
-#else
-	FText PlatformName = LOCTEXT("PlatformName_Other", "Other OS");
-#endif
+	FText TaskName = FText::Format(LOCTEXT("PkgTask", "Packaging {0} ({1})"), FText::FromString(ModName), FText::FromString(TargetPlatform));
 
-	IUATHelperModule::UatTaskResultCallack UatTask = [ModName, ProjectName](FString Result, double TaskTime)
+	IUATHelperModule::UatTaskResultCallack UatTask = [ModName, ProjectName, StageFolder, TargetPlatform](FString Result, double TaskTime)
 	{
 		const bool bSuccess = Result.Equals(TEXT("Completed"), ESearchCase::IgnoreCase);
 		if (!bSuccess)
@@ -177,7 +191,7 @@ void FHelloNeighborModModule::PackageSelectedMod(FString ModName)
 		IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
 		FString ProjectRoot = FPaths::ConvertRelativePathToFull(FPaths::GetPath(FPaths::GetProjectFilePath()));
 		FString ModRoot = FPaths::Combine(ProjectRoot, TEXT("Mods"), ModName);
-		FString SourcePath = FPaths::Combine(ModRoot, TEXT("Saved/StagedBuilds/WindowsNoEditor"), ProjectName, TEXT("Mods"), ModName);
+		FString SourcePath = FPaths::Combine(ModRoot, TEXT("Saved/StagedBuilds"), StageFolder, ProjectName, TEXT("Mods"), ModName);
 		FString ResourcesPath = FPaths::Combine(ModRoot, TEXT("Resources"));
 		FString TargetPath = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("ModPackage"), ModName);
 
@@ -214,16 +228,14 @@ void FHelloNeighborModModule::PackageSelectedMod(FString ModName)
 			}
 		}
 		else
-		{
 			UE_LOG(LogTemp, Warning, TEXT("Source directory not found: %s"), *SourcePath);
-		}
 
 		UE_LOG(LogTemp, Display, TEXT("Mod %s packaged successfully."), *ModName);
 	};
 
 	IUATHelperModule::Get().CreateUatTask(
 		CommandLine,
-		PlatformName,
+		TaskName,
 		LOCTEXT("PackagePluginTaskName", "Packaging Plugin"),
 		LOCTEXT("PackagePluginTaskShortName", "Package Plugin Task"),
 		FEditorStyle::GetBrush(TEXT("MainFrame.CookContent")),

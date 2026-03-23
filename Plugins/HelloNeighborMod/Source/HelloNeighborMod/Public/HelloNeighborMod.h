@@ -20,13 +20,13 @@ public:
 	
 private:
 	void RegisterMenus();
-
-	TSharedRef<class SDockTab> OnSpawnPluginTab(const class FSpawnTabArgs& SpawnTabArgs);
-	
-	TSharedRef<class SWidget> GenerateModListWidget();
 	TArray<FString> GetAllMods();
-	void PackageSelectedMod(FString ModName);
+	
+	TSharedRef<class SDockTab> OnSpawnPluginTab(const class FSpawnTabArgs& SpawnTabArgs);
 
+	TSharedRef<class SWidget> GenerateModListWidget();
+	void GeneratePlatformMenu(FMenuBuilder& MenuBuilder, FString ModName);
+	void PackageSelectedMod(FString ModName, FString TargetPlatform, FString CookFlavor);
 private:
 	TSharedPtr<class FUICommandList> CreateModCommand;
 	TSharedPtr<class FUICommandList> PackageModCommands;

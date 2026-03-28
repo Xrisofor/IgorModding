@@ -10,26 +10,6 @@
 
 class IDetailLayoutBuilder;
 struct FPluginDescriptor;
-struct FPluginReferenceDescriptor;
-
-USTRUCT()
-struct FModPluginReferenceMetadata
-{
-public:
-	GENERATED_BODY()
-	
-	UPROPERTY(EditAnywhere, Category = "Plugin Reference")
-	FString Name;
-	
-	UPROPERTY(EditAnywhere, Category = "Plugin Reference")
-	bool bOptional = false;
-	
-	UPROPERTY(EditAnywhere, Category = "Plugin Reference")
-	bool bEnabled = true;
-	
-	void PopulateFromDescriptor(const FPluginReferenceDescriptor& InDescriptor);
-	void CopyIntoDescriptor(FPluginReferenceDescriptor& OutDescriptor) const;
-};
 
 UCLASS()
 class UModMetadataObject : public UObject
@@ -61,22 +41,7 @@ public:
 	FString CreatedByURL;
 	
 	UPROPERTY(EditAnywhere, Category = Details)
-	FString DocsURL;
-	
-	UPROPERTY(EditAnywhere, Category = Details)
-	FString MarketplaceURL;
-	
-	UPROPERTY(EditAnywhere, Category = Details)
-	FString SupportURL;
-	
-	UPROPERTY(EditAnywhere, Category = Details)
-	bool bCanContainContent;
-	
-	UPROPERTY(EditAnywhere, Category = Details)
 	bool bIsBetaVersion;
-	
-	UPROPERTY(EditAnywhere, Category = Dependencies)
-	TArray<FModPluginReferenceMetadata> Plugins;
 
 	void PopulateFromDescriptor(const FPluginDescriptor& InDescriptor);
 	void CopyIntoDescriptor(FPluginDescriptor& OutDescriptor) const;

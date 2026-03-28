@@ -41,22 +41,57 @@ To correctly build the game with the mod system, follow these steps in **Project
 
 ### Example Screenshots of Project Launcher Setup
 
-| Build & Cook | Release / DLC / Patching Settings | Advanced Settings | Package, Archive & Deploy |
-|:-:|:-:|:-:|:-:|
+|                Build & Cook                  |       Release / DLC / Patching Settings       |              Advanced Settings              |         Package, Archive & Deploy          |
+|:--------------------------------------------:|:---------------------------------------------:|:-------------------------------------------:|:------------------------------------------:|
 | ![BuildCook](Resources/ProjectLauncher1.png) | ![ReleaseDLC](Resources/ProjectLauncher2.png) | ![Advanced](Resources/ProjectLauncher3.png) | ![Package](Resources/ProjectLauncher4.png) |
 
-## Creating a Mod with Hello Neighbor Mod
+## The Hello Neighbor Mod Plugin
 
-The plugin adds two new buttons in the editor:
+The plugin provides a comprehensive toolset for mod management, automated packaging, and Steam Workshop integration directly from the Unreal Editor toolbar.
 
-- **Create Mod** - opens a window for creating new mods.  
-  - Uses a custom `IPluginWizardDefinition` with mod-specific settings and templates.  
-  - Replicates the original Hello Neighbor Mod Kit workflow for creating mods.  
+### Key Features
 
-- **Package Mod** - a dropdown showing all available mods that can be packaged.  
-  - Allows you to easily build and distribute your mods from within the editor.
+- **Create Mod** - Opens a dedicated creation wizard.
+    - Uses custom `IPluginWizardDefinition` with mod-specific templates (e.g., Empty Map, AI Setup, Test Field).
+    - Automatically handles project file cleanup to ensure mods are correctly isolated.
+    - Supports custom icons and metadata during the creation process.
 
-<div align="center">
-    <img src="Resources/NewGameMod.png" /><br />
-    Create Mod window
-</div>
+- **Package Mod** - Automated multi-platform building system.
+    - Supports **Windows (64-bit)**, **Linux**, and **Android (ASTC)**.
+    - Uses UAT (Unreal Automation Tool) to create unversioned cooked content (DLC/Pak) based on a specific release version.
+    - Automatically moves packaged files to a dedicated `Saved/ModPackage` folder for distribution.
+
+- **Upload Mod (Steam Workshop)** – Integrated publication tool.
+    - **One-Click Workflow**: If a mod isn't packaged yet, the plugin will "Build & Upload" automatically.
+    - **Metadata Sync**: Syncs Friendly Name, Description, and Icon from the plugin descriptor to the Steam Workshop item.
+    - **Persistent IDs**: Tracks Steam Workshop `PublishedFileId` via a `steam_id.txt` file inside the mod folder to handle updates seamlessly.
+    - Real-time upload progress notifications and status updates in the editor.
+
+- **Edit Mod Properties** - A custom detail view to modify `uplugin` metadata.
+    - Change Friendly Name, Author, Version, and Category.
+    - **Icon Customization**: Easily swap the mod's 128x128 icon through the interface.
+    - Integrated with Source Control (Checkout) for descriptor updates.
+
+- **Plugin Settings** - Located in **Project Settings → Plugins → Hello Neighbor Mod**.
+    - Define the **Based On Release Version** to match your game's build version.
+    - Customize the list of **Mod Templates** (paths and icons).
+    - Configure **Supported Platforms** and build flavors (like Android ASTC).
+
+### Steam Workshop Integration & Setup
+
+The plugin features an automated Steam API lifecycle management system. To enable publication features, you must configure your `DefaultEngine.ini`:
+
+```ini
+[OnlineSubsystemSteam]
+bEnabled=true
+SteamDevAppId=480
+```
+
+**How it works:**
+- **Automatic Initialization**: On startup, the plugin reads `SteamDevAppId` and automatically creates a `steam_appid.txt` file in the engine's executable directory (e.g., `Engine/Binaries/Win64/`). This initializes the Steam API for the editor session.
+- **Dynamic UI**: If the `[OnlineSubsystemSteam]` section or `SteamDevAppId` is missing, the **"Upload Mod"** button and all related publication logic will be completely disabled.
+- **Clean Exit**: Upon closing the editor, the plugin ensures the Steam API is shut down correctly and the environment remains clean for standard development.
+
+|           Create Mod Window            |         Edit Mod Properties Window          |
+|:--------------------------------------:|:-------------------------------------------:|
+| ![CreateMod](Resources/NewGameMod.png) | ![EditMod](Resources/EditModProperties.png) |

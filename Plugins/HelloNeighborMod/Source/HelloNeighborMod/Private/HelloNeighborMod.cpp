@@ -36,11 +36,8 @@ void FHelloNeighborModModule::StartupModule()
 	FHelloNeighborModStyle::Initialize();
 
 	FString AppId;
-	GConfig->GetString(TEXT("OnlineSubsystemSteam"), TEXT("SteamDevAppId"), AppId, GEngineIni);
-	FString SteamAppIdPath = FString(FPlatformProcess::BaseDir()) + "/steam_appid.txt";
-
-	if (!AppId.IsEmpty())
-		FFileHelper::SaveStringToFile(AppId, *SteamAppIdPath);
+	if (GConfig->GetString(TEXT("OnlineSubsystemSteam"), TEXT("SteamDevAppId"), AppId, GEngineIni) && !AppId.IsEmpty())
+		FFileHelper::SaveStringToFile(AppId, *GetSteamAppIdPath());
 
 	SteamAPI_Init();
 	SteamAPI_RunCallbacks();
@@ -72,9 +69,15 @@ void FHelloNeighborModModule::ShutdownModule()
 		FPropertyEditorModule& PropertyModule = FModuleManager::GetModuleChecked<FPropertyEditorModule>("PropertyEditor");
 		PropertyModule.UnregisterCustomClassLayout(UModMetadataObject::StaticClass()->GetFName());
 	}
-	
+
 	SteamAPI_RunCallbacks();
 	SteamAPI_Shutdown();
+	
+	IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
+	FString Path = GetSteamAppIdPath();
+    
+	if (PlatformFile.FileExists(*Path))
+		PlatformFile.DeleteFile(*Path);
 }
 
 void FHelloNeighborModModule::RegisterMenus()

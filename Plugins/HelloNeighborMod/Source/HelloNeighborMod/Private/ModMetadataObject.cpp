@@ -13,22 +13,6 @@
 #include "DetailCategoryBuilder.h"
 #include "SExternalImageReference.h"
 
-#pragma region Mod Plugin Reference Metadata
-void FModPluginReferenceMetadata::PopulateFromDescriptor(const FPluginReferenceDescriptor& InDescriptor)
-{
-	Name = InDescriptor.Name;
-	bEnabled = InDescriptor.bEnabled;
-	bOptional = InDescriptor.bOptional;
-}
-
-void FModPluginReferenceMetadata::CopyIntoDescriptor(FPluginReferenceDescriptor& OutDescriptor) const
-{
-	OutDescriptor.Name = Name;
-	OutDescriptor.bEnabled = bEnabled;
-	OutDescriptor.bOptional = bOptional;
-}
-#pragma endregion
-
 #pragma region Mod Metadata Object
 void UModMetadataObject::PopulateFromDescriptor(const FPluginDescriptor& InDescriptor)
 {
@@ -39,18 +23,7 @@ void UModMetadataObject::PopulateFromDescriptor(const FPluginDescriptor& InDescr
 	Category = InDescriptor.Category;
 	CreatedBy = InDescriptor.CreatedBy;
 	CreatedByURL = InDescriptor.CreatedByURL;
-	DocsURL = InDescriptor.DocsURL;
-	MarketplaceURL = InDescriptor.MarketplaceURL;
-	SupportURL = InDescriptor.SupportURL;
-	bCanContainContent = InDescriptor.bCanContainContent;
 	bIsBetaVersion = InDescriptor.bIsBetaVersion;
-
-	Plugins.Reset(InDescriptor.Plugins.Num());
-	for (const FPluginReferenceDescriptor& PluginRefDesc : InDescriptor.Plugins)
-	{
-		FModPluginReferenceMetadata& PluginRef = Plugins.AddDefaulted_GetRef();
-		PluginRef.PopulateFromDescriptor(PluginRefDesc);
-	}
 }
 
 void UModMetadataObject::CopyIntoDescriptor(FPluginDescriptor& OutDescriptor) const
@@ -62,41 +35,18 @@ void UModMetadataObject::CopyIntoDescriptor(FPluginDescriptor& OutDescriptor) co
 	OutDescriptor.Category = Category;
 	OutDescriptor.CreatedBy = CreatedBy;
 	OutDescriptor.CreatedByURL = CreatedByURL;
-	OutDescriptor.DocsURL = DocsURL;
-	OutDescriptor.MarketplaceURL = MarketplaceURL;
-	OutDescriptor.SupportURL = SupportURL;
-	OutDescriptor.bCanContainContent = bCanContainContent;
 	OutDescriptor.bIsBetaVersion = bIsBetaVersion;
-
-	TArray<FPluginReferenceDescriptor> NewPlugins;
-	NewPlugins.Reserve(Plugins.Num());
-
-	for (const FModPluginReferenceMetadata& PluginRefMetadata : Plugins)
-	{
-		if (PluginRefMetadata.Name.IsEmpty())
-		{
-			continue;
-		}
-
-		FPluginReferenceDescriptor& NewPluginRefDesc = NewPlugins.AddDefaulted_GetRef();
-
-		if (FPluginReferenceDescriptor* OldPluginRefDesc = OutDescriptor.Plugins.FindByPredicate([&PluginRefMetadata](const FPluginReferenceDescriptor& Item) { return Item.Name == PluginRefMetadata.Name; }))
-		{
-			NewPluginRefDesc = *OldPluginRefDesc;
-			OldPluginRefDesc->Name.Empty();
-		}
-
-		PluginRefMetadata.CopyIntoDescriptor(NewPluginRefDesc);
-	}
-
-	OutDescriptor.Plugins = MoveTemp(NewPlugins);
 }
 
 void UModMetadataObject::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
 
-	if (PropertyChangedEvent.Property && PropertyChangedEvent.Property->GetName() == TEXT("TargetIconPath"))
+	FName PropertyName = PropertyChangedEvent.Property != nullptr
+		? PropertyChangedEvent.Property->GetFName()
+		: NAME_None;
+
+	if (PropertyName == GET_MEMBER_NAME_CHECKED(UModMetadataObject, TargetIconPath))
 		FEditorDelegates::RefreshAllBrowsers.Broadcast();
 }
 #pragma endregion

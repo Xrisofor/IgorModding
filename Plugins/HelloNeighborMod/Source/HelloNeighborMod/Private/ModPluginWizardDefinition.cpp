@@ -85,32 +85,17 @@ ELoadingPhase::Type FModPluginWizardDefinition::GetPluginLoadingPhase() const
 
 bool FModPluginWizardDefinition::GetTemplateIconPath(TSharedRef<FPluginTemplateDescription> InTemplate, FString& OutIconPath) const
 {
-	UHelloNeighborModSettings* Settings = GetMutableDefault<UHelloNeighborModSettings>();
-	const FString DefaultIconPath = PluginBaseDir / TEXT("Resources/Icon128.png");
-	
-	if (!Settings)
-	{
-		OutIconPath = DefaultIconPath;
-		return false;
-	}
-	
-	const FPluginTemplate* FoundTemplate = Settings->Templates.FindByPredicate([&](const FPluginTemplate& T)
-	{
-		return T.TemplateName.EqualTo(InTemplate->Name);
-	});
-	
-	if (FoundTemplate)
-	{
-		OutIconPath = FPaths::Combine(PluginBaseDir, TEXT("Resources"), FoundTemplate->IconFileName);
-		
-		if (!FPlatformFileManager::Get().GetPlatformFile().FileExists(*OutIconPath))
-			OutIconPath = DefaultIconPath;
+	const UHelloNeighborModSettings* Settings = UHelloNeighborModSettings::Get();
+	const FString DefaultIcon = FPaths::Combine(PluginBaseDir, TEXT("Resources/Icon128.png"));
 
-		return true;
+	if (const FPluginTemplate* Found = Settings->FindTemplateByName(InTemplate->Name))
+	{
+		OutIconPath = FPaths::Combine(PluginBaseDir, TEXT("Resources"), Found->IconFileName);
+		if (FPaths::FileExists(OutIconPath)) return true;
 	}
-	
-	OutIconPath = DefaultIconPath;
-	return false;
+    
+	OutIconPath = DefaultIcon;
+	return true;
 }
 
 TArray<FString> FModPluginWizardDefinition::GetFoldersForSelection() const
@@ -127,20 +112,13 @@ TArray<FString> FModPluginWizardDefinition::GetFoldersForSelection() const
 
 void FModPluginWizardDefinition::PopulateTemplatesSource()
 {
-	UHelloNeighborModSettings* Settings = GetMutableDefault<UHelloNeighborModSettings>();
-	if (!Settings) return;
-
-	for (const FPluginTemplate& Template : Settings->Templates)
+	for (const FPluginTemplate& T : UHelloNeighborModSettings::Get()->Templates)
 	{
-		TSharedRef<FPluginTemplateDescription> NewTemplate = MakeShareable(new FPluginTemplateDescription(
-			Template.TemplateName,
-			Template.TemplateDescription,
-			PluginBaseDir / TEXT("Templates") / Template.TemplatePath,
-			true,
-			EHostType::Runtime
+		TemplateDefinitions.Add(MakeShared<FPluginTemplateDescription>(
+			T.TemplateName, T.TemplateDescription,
+			FPaths::Combine(PluginBaseDir, TEXT("Templates"), T.TemplatePath),
+			true, EHostType::Runtime
 		));
-
-		TemplateDefinitions.Add(NewTemplate);
 	}
 }
 

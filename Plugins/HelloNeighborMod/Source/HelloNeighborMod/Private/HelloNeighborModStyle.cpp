@@ -49,7 +49,8 @@ TSharedRef< FSlateStyleSet > FHelloNeighborModStyle::Create()
 	
 	Style->Set("HelloNeighborMod.CreateNewMod", new IMAGE_BRUSH(TEXT("CreateIcon_40x"), Icon40x40));
 	Style->Set("HelloNeighborMod.PackageMod", new IMAGE_BRUSH(TEXT("PackageIcon_40x"), Icon40x40));
-
+	Style->Set("HelloNeighborMod.PublicationMod", new IMAGE_BRUSH(TEXT("SteamIcon_40x"), Icon40x40));
+	
 	Style->Set("HelloNeighborMod.ModFolder", new IMAGE_BRUSH(TEXT("Folder"), Icon16x40));
 
 	return Style;

@@ -1,7 +1,6 @@
 // (C) Xrisofor
 
 #include "ModKit.h"
-#include "../Gameplay/Sosed/Sosed.h"
 #include "Misc/Paths.h"
 #include "HAL/FileManager.h"
 #include "AssetRegistryModule.h"
@@ -79,6 +78,7 @@ void UModKit::ProcessNextMod()
     NewMod.FriendlyName = Plugin->GetDescriptor().FriendlyName;
     NewMod.Description = Plugin->GetDescriptor().Description;
     NewMod.Author = Plugin->GetDescriptor().CreatedBy;
+    NewMod.Version = Plugin->GetDescriptor().VersionName;
     NewMod.bIsBetaVersion = Plugin->GetDescriptor().bIsBetaVersion;
     
     FString IconPath = FPaths::Combine(Plugin->GetBaseDir(), TEXT("Resources/Icon128.png"));
@@ -122,10 +122,9 @@ void UModKit::ProcessNextMod()
         
         if (Asset.AssetClass == UWorld::StaticClass()->GetFName())
         {
-            FModMap NewMap;
+            FModData NewMap;
+            static_cast<FMod&>(NewMap) = NewMod; 
             NewMap.AssetData = Asset;
-            NewMap.ModName = NewMod.Name;
-            NewMap.Brush = NewMod.IconBrush;
             AllModMaps.Add(NewMap);
         }
         else if (Asset.AssetClass == UBlueprint::StaticClass()->GetFName())
@@ -135,15 +134,9 @@ void UModKit::ProcessNextMod()
             {
                 if (ParentClassPath.Contains(TEXT("Sosed")))
                 {
-                    FModNeighbor NewNeighbor;
+                    FModData NewNeighbor;
+                    static_cast<FMod&>(NewNeighbor) = NewMod; 
                     NewNeighbor.AssetData = Asset;
-                    
-                    FString GeneratedClassPath;
-                    if (Asset.GetTagValue(FBlueprintTags::GeneratedClassPath, GeneratedClassPath))
-                        NewNeighbor.NeighborClass = TSoftClassPtr<ASosed>(FSoftObjectPath(GeneratedClassPath));
-
-                    NewNeighbor.ModName = NewMod.Name;
-                    NewNeighbor.Brush = NewMod.IconBrush;
                     AllModNeighbors.Add(NewNeighbor);
                 }
             }

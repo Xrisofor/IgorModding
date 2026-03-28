@@ -3,65 +3,78 @@
 #include "HelloNeighborMod.h"
 
 #include "HelloNeighborModStyle.h"
-#include "HelloNeighborModCommands.h"
 #include "HelloNeighborModSettings.h"
 #include "ModPluginWizardDefinition.h"
+#include "ModMetadataObject.h"
+#include "ModPackageHandler.h"
+#include "ModPublishHandler.h"
 
-#include "Widgets/Layout/SBox.h"
-#include "Widgets/Layout/SSpacer.h"
-#include "Widgets/Input/SButton.h"
-#include "Widgets/Text/STextBlock.h"
-#include "Widgets/Input/SEditableTextBox.h"
-#include "Widgets/Input/SCheckBox.h"
-#include "Widgets/Images/SImage.h"
-#include "Widgets/Docking/SDockTab.h"
+#include "PropertyEditorModule.h"
+#include "IDetailsView.h"
+#include "Widgets/SWindow.h"
+#include "PropertyEditorModule.h"
+#include "Modules/ModuleManager.h"
+#include "Widgets/SWindow.h"
 
-#include "EditorStyleSet.h"
-#include "ToolMenus.h"
 #include "IPluginBrowser.h"
-#include "IUATHelperModule.h"
+#include "ISourceControlOperation.h"
+#include "SourceControlOperations.h"
+#include "ISourceControlProvider.h"
+#include "ISourceControlModule.h"
 
+#include "ToolMenus.h"
+#include "Interfaces/IPluginManager.h"
 #include "Framework/Docking/TabManager.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
-#include "Misc/Paths.h"
-#include "HAL/FileManager.h"
-#include "Interfaces/IPluginManager.h"
+#include "Misc/FileHelper.h"
 
 #define LOCTEXT_NAMESPACE "FHelloNeighborModModule"
 
+#pragma region Startup & Shutdown Module | Register Menus
 void FHelloNeighborModModule::StartupModule()
 {
 	FHelloNeighborModStyle::Initialize();
-	FHelloNeighborModStyle::ReloadTextures();
 
-	FHelloNeighborModCommands::Register();
+	FString AppId;
+	GConfig->GetString(TEXT("OnlineSubsystemSteam"), TEXT("SteamDevAppId"), AppId, GEngineIni);
+	FString SteamAppIdPath = FString(FPlatformProcess::BaseDir()) + "/steam_appid.txt";
 
-	CreateModCommand = MakeShareable(new FUICommandList);
-	PackageModCommands = MakeShareable(new FUICommandList);
+	if (!AppId.IsEmpty())
+		FFileHelper::SaveStringToFile(AppId, *SteamAppIdPath);
 
-	CreateModCommand->MapAction(
-		FHelloNeighborModCommands::Get().NewModButton,
-		FExecuteAction::CreateRaw(this, &FHelloNeighborModModule::PluginButtonClicked),
-		FCanExecuteAction());
+	SteamAPI_Init();
+	SteamAPI_RunCallbacks();
 
 	UToolMenus::RegisterStartupCallback(
 		FSimpleMulticastDelegate::FDelegate::CreateRaw(this, &FHelloNeighborModModule::RegisterMenus));
 
 	FGlobalTabmanager::Get()->RegisterNomadTabSpawner(HelloNeighborCreateNewModTabName,
-		FOnSpawnTab::CreateRaw(this, &FHelloNeighborModModule::OnSpawnPluginTab))
+		FOnSpawnTab::CreateRaw(this, &FHelloNeighborModModule::OnSpawnCreateTab))
 		.SetDisplayName(LOCTEXT("CreateNewModTabTitle", "New Game Mod"))
 		.SetMenuType(ETabSpawnerMenuType::Hidden);
+
+	FPropertyEditorModule& PropertyModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
+	PropertyModule.RegisterCustomClassLayout(
+		UModMetadataObject::StaticClass()->GetFName(),
+		FOnGetDetailCustomizationInstance::CreateStatic(&FModPluginMetadataCustomization::MakeInstance)
+	);
+	PropertyModule.NotifyCustomizationModuleChanged();
 }
 
 void FHelloNeighborModModule::ShutdownModule()
 {
 	UToolMenus::UnRegisterStartupCallback(this);
-	UToolMenus::UnregisterOwner(this);
-
 	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(HelloNeighborCreateNewModTabName);
-
-	FHelloNeighborModCommands::Unregister();
 	FHelloNeighborModStyle::Shutdown();
+
+	if (FModuleManager::Get().IsModuleLoaded("PropertyEditor"))
+	{
+		FPropertyEditorModule& PropertyModule = FModuleManager::GetModuleChecked<FPropertyEditorModule>("PropertyEditor");
+		PropertyModule.UnregisterCustomClassLayout(UModMetadataObject::StaticClass()->GetFName());
+	}
+	
+	SteamAPI_RunCallbacks();
+	SteamAPI_Shutdown();
 }
 
 void FHelloNeighborModModule::RegisterMenus()
@@ -69,55 +82,54 @@ void FHelloNeighborModModule::RegisterMenus()
 	FToolMenuOwnerScoped OwnerScoped(this);
 	UToolMenu* Toolbar = UToolMenus::Get()->ExtendMenu("LevelEditor.LevelEditorToolBar");
 	FToolMenuSection& Section = Toolbar->FindOrAddSection("PlayToolBar");
-
-	// Create Mod Button
-	FToolMenuEntry CreateModEntry = FToolMenuEntry::InitToolBarButton(FHelloNeighborModCommands::Get().NewModButton);
-	CreateModEntry.SetCommandList(CreateModCommand);
-	CreateModEntry.Icon = FSlateIcon(FHelloNeighborModStyle::Get().GetStyleSetName(), "HelloNeighborMod.CreateNewMod");
-	Section.AddEntry(CreateModEntry);
-
-	// Package Mod Dropdown
-	FToolMenuEntry PackageModEntry = FToolMenuEntry::InitComboButton(
-		"PackageModDropdown",
-		FUIAction(),
-		FOnGetContent::CreateRaw(this, &FHelloNeighborModModule::GenerateModListWidget),
-		LOCTEXT("PackageMod", "Package Mod"),
-		LOCTEXT("PackageModTooltip", "Select a mod to package")
-	);
-	PackageModEntry.Icon = FSlateIcon(FHelloNeighborModStyle::Get().GetStyleSetName(), "HelloNeighborMod.PackageMod");
-	Section.AddEntry(PackageModEntry);
-}
-
-TArray<FString> FHelloNeighborModModule::GetAllMods()
-{
-	TArray<FString> AllMods;
 	
-	TArray<TSharedRef<IPlugin>> Plugins = IPluginManager::Get().GetDiscoveredPlugins();
-
-	for (TSharedRef<IPlugin> Plugin : Plugins)
+	Section.AddEntry(FToolMenuEntry::InitToolBarButton(
+		"CreateModButton",
+		FUIAction(FExecuteAction::CreateRaw(this, &FHelloNeighborModModule::CreateButtonClicked)),
+		LOCTEXT("CreateModLabel", "Create Mod"),
+		LOCTEXT("CreateModTooltip", "Create a new mod using templates"),
+		FSlateIcon(FHelloNeighborModStyle::Get().GetStyleSetName(), "HelloNeighborMod.CreateNewMod")
+	));
+	
+	Section.AddEntry(FToolMenuEntry::InitComboButton(
+		"PackageMenu", FUIAction(),
+		FOnGetContent::CreateRaw(this, &FHelloNeighborModModule::GenerateModMenu, false),
+		LOCTEXT("PackageMod", "Package Mod"),
+		LOCTEXT("PackageModTooltip", "Select a mod and platform to package"),
+		FSlateIcon(FHelloNeighborModStyle::Get().GetStyleSetName(), "HelloNeighborMod.PackageMod")
+	));
+	
+	if (SteamAPI_Init() && SteamUser()->BLoggedOn())
 	{
-		FString PluginBaseDir = Plugin->GetBaseDir();
-		
-		if (!PluginBaseDir.StartsWith(FPaths::ProjectModsDir()))
-			continue;
-
-		AllMods.Add(Plugin->GetName());
+		Section.AddEntry(FToolMenuEntry::InitComboButton(
+			"PublicationMenu", FUIAction(),
+			FOnGetContent::CreateRaw(this, &FHelloNeighborModModule::GenerateModMenu, true),
+			LOCTEXT("PublishMod", "Upload Mod"),
+			LOCTEXT("PublishModTooltip", "Upload your mods to the Workshop"),
+			FSlateIcon(FHelloNeighborModStyle::Get().GetStyleSetName(), "HelloNeighborMod.PublicationMod")
+		));
 	}
-
-	return AllMods;
 }
+#pragma endregion 
 
-TSharedRef<SWidget> FHelloNeighborModModule::GenerateModListWidget()
+#pragma region Generate Mod Menu & Fill Platform Sub Menu
+TSharedRef<SWidget> FHelloNeighborModModule::GenerateModMenu(bool bIsPublishMenu)
 {
-	FMenuBuilder MenuBuilder(true, PackageModCommands);
+	FMenuBuilder MenuBuilder(true, nullptr);
 	TArray<FString> AllMods = GetAllMods();
+
+	if (AllMods.Num() == 0)
+	{
+		MenuBuilder.AddMenuEntry(LOCTEXT("NoModsFound", "No mods found"), FText::GetEmpty(), FSlateIcon(), FUIAction());
+		return MenuBuilder.MakeWidget();
+	}
 
 	for (const FString& ModName : AllMods)
 	{
 		MenuBuilder.AddSubMenu(
 			FText::FromString(ModName),
-			FText::Format(LOCTEXT("PackageModTooltip", "Select platform to package {0}"), FText::FromString(ModName)),
-			FNewMenuDelegate::CreateRaw(this, &FHelloNeighborModModule::GeneratePlatformMenu, ModName),
+			FText::Format(LOCTEXT("ModSubMenuT", "Options for {0}"), FText::FromString(ModName)),
+			FNewMenuDelegate::CreateRaw(this, &FHelloNeighborModModule::FillPlatformSubMenu, ModName, bIsPublishMenu),
 			false,
 			FSlateIcon(FHelloNeighborModStyle::Get().GetStyleSetName(), "HelloNeighborMod.ModFolder")
 		);
@@ -126,128 +138,174 @@ TSharedRef<SWidget> FHelloNeighborModModule::GenerateModListWidget()
 	return MenuBuilder.MakeWidget();
 }
 
-void FHelloNeighborModModule::GeneratePlatformMenu(FMenuBuilder& MenuBuilder, FString ModName)
+void FHelloNeighborModModule::FillPlatformSubMenu(FMenuBuilder& MenuBuilder, FString ModName, bool bIsPublishMenu)
 {
 	const UHelloNeighborModSettings* Settings = GetDefault<UHelloNeighborModSettings>();
-	if (!Settings) return;
 	
 	for (const FBuildPlatform& Platform : Settings->SupportedPlatforms)
 	{
+		if (bIsPublishMenu && Platform.PlatformName.Contains(TEXT("Android"))) continue;
+
+		FText Label = Platform.DisplayName;
+		FText Tooltip = Platform.Tooltip;
+
+		if (bIsPublishMenu)
+		{
+			bool bIsPackaged = FModPackageHandler::IsModPackaged(ModName, Platform.PlatformName);
+			
+			Label = bIsPackaged ? 
+				FText::Format(LOCTEXT("UploadReady", "Upload {0}"), Platform.DisplayName) : 
+				FText::Format(LOCTEXT("BuildAndUpload", "Build & Upload {0}"), Platform.DisplayName);
+			
+			Tooltip = bIsPackaged ? 
+				LOCTEXT("UploadTip", "Files found for this platform. Ready to upload.") : 
+				LOCTEXT("BuildUploadTip", "No files found for this platform. Will build then upload.");
+		}
+
 		MenuBuilder.AddMenuEntry(
-			Platform.DisplayName,
-			Platform.Tooltip,
+			Label, Tooltip,
 			FSlateIcon(FEditorStyle::GetStyleSetName(), Platform.IconName),
-			FUIAction(FExecuteAction::CreateRaw(
-				this, 
-				&FHelloNeighborModModule::PackageSelectedMod, 
-				ModName, 
-				Platform.PlatformName, 
-				Platform.TargetFlavor
-			))
+			FUIAction(FExecuteAction::CreateLambda([ModName, Platform, bIsPublishMenu]() {
+				if (bIsPublishMenu)
+					FModPublishHandler::Get().PublishMod(ModName, Platform.PlatformName);
+				else
+					FModPackageHandler::PackageMod(ModName, Platform.PlatformName, Platform.TargetFlavor);
+			}))
 		);
 	}
-}
 
-void FHelloNeighborModModule::PackageSelectedMod(FString ModName, FString TargetPlatform, FString CookFlavor)
-{
-	TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(ModName);
-	if (!Plugin.IsValid()) return;
+	MenuBuilder.AddMenuSeparator();
 
-	UHelloNeighborModSettings* ModSettings = GetMutableDefault<UHelloNeighborModSettings>();
-	FString BasedOnReleaseVersion = ModSettings->BasedOnReleaseVersion;
-
-	FString ProjectFullPath = FPaths::ConvertRelativePathToFull(FPaths::GetProjectFilePath());
-	FString ProjectName = FPaths::GetBaseFilename(ProjectFullPath);
-
-	FString PlatformArgs = FString::Printf(TEXT("-platform=%s -targetplatform=%s"), *TargetPlatform, *TargetPlatform);
-	FString StageFolder = TargetPlatform; 
-	if (TargetPlatform == "Win64") StageFolder = TEXT("WindowsNoEditor");
-	else if (TargetPlatform == "Linux") StageFolder = TEXT("LinuxNoEditor");
-	
-	if (!CookFlavor.IsEmpty())
-	{
-		PlatformArgs += FString::Printf(TEXT(" -cookflavor=%s"), *CookFlavor);
-		StageFolder += FString::Printf(TEXT("_%s"), *CookFlavor);
-	}
-	
-	FString CommandLine = FString::Printf(
-		TEXT("BuildCookRun -project=\"%s\" -noP4 -clientconfig=Development -nocompile -nocompileeditor -installed -ue4exe=UE4Editor-Cmd.exe -utf8output %s -ini:Game:[/Script/UnrealEd.ProjectPackagingSettings]:BlueprintNativizationMethod=Disabled -cook -unversionedcookedcontent -pak -dlcname=\"%s\" -DLCIncludeEngineContent -basedonreleaseversion=%s -stage -archive"),
-		*ProjectFullPath,
-		*PlatformArgs,
-		*ModName,
-		*BasedOnReleaseVersion);
-
-	FText TaskName = FText::Format(LOCTEXT("PkgTask", "Packaging {0} ({1})"), FText::FromString(ModName), FText::FromString(TargetPlatform));
-
-	IUATHelperModule::UatTaskResultCallack UatTask = [ModName, ProjectName, StageFolder, TargetPlatform](FString Result, double TaskTime)
-	{
-		const bool bSuccess = Result.Equals(TEXT("Completed"), ESearchCase::IgnoreCase);
-		if (!bSuccess)
-		{
-			UE_LOG(LogTemp, Error, TEXT("Packaging mod %s failed (Result: %s)"), *ModName, *Result);
-			return;
-		}
-
-		IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
-		FString ProjectRoot = FPaths::ConvertRelativePathToFull(FPaths::GetPath(FPaths::GetProjectFilePath()));
-		FString ModRoot = FPaths::Combine(ProjectRoot, TEXT("Mods"), ModName);
-		FString SourcePath = FPaths::Combine(ModRoot, TEXT("Saved/StagedBuilds"), StageFolder, ProjectName, TEXT("Mods"), ModName);
-		FString ResourcesPath = FPaths::Combine(ModRoot, TEXT("Resources"));
-		FString TargetPath = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("ModPackage"), ModName);
-
-		if (!PlatformFile.DirectoryExists(*TargetPath))
-			PlatformFile.CreateDirectoryTree(*TargetPath);
-		
-		if (PlatformFile.DirectoryExists(*ResourcesPath))
-		{
-			FString TargetResources = FPaths::Combine(TargetPath, TEXT("Resources"));
-			if (!PlatformFile.DirectoryExists(*TargetResources))
-				PlatformFile.CreateDirectoryTree(*TargetResources);
-
-			if (PlatformFile.CopyDirectoryTree(*TargetResources, *ResourcesPath, true))
+	MenuBuilder.AddMenuEntry(
+		LOCTEXT("EditMod", "Edit Mod Properties..."),
+		LOCTEXT("EditModTip", "Change name, description, author, etc."),
+		FSlateIcon(FHelloNeighborModStyle::GetStyleSetName(), "HelloNeighborMod.CreateNewMod"),
+		FUIAction(FExecuteAction::CreateLambda([this, ModName]() {
+			TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(ModName);
+			if (Plugin.IsValid())
 			{
-				UE_LOG(LogTemp, Display, TEXT("Resources copied: %s -> %s"), *ResourcesPath, *TargetResources);
+				this->OpenModEditor(Plugin.ToSharedRef());
 			}
-			else
-			{
-				UE_LOG(LogTemp, Error, TEXT("Failed to copy Resources: %s -> %s"), *ResourcesPath, *TargetResources);
-			}
-		}
-		
-		if (PlatformFile.DirectoryExists(*SourcePath))
-		{
-			UE_LOG(LogTemp, Display, TEXT("Copying built mod from %s to %s"), *SourcePath, *TargetPath);
-
-			if (PlatformFile.CopyDirectoryTree(*TargetPath, *SourcePath, true))
-			{
-				UE_LOG(LogTemp, Display, TEXT("Built mod copied successfully"));
-			}
-			else
-			{
-				UE_LOG(LogTemp, Error, TEXT("Failed to copy built mod from %s -> %s"), *SourcePath, *TargetPath);
-			}
-		}
-		else
-			UE_LOG(LogTemp, Warning, TEXT("Source directory not found: %s"), *SourcePath);
-
-		UE_LOG(LogTemp, Display, TEXT("Mod %s packaged successfully."), *ModName);
-	};
-
-	IUATHelperModule::Get().CreateUatTask(
-		CommandLine,
-		TaskName,
-		LOCTEXT("PackagePluginTaskName", "Packaging Plugin"),
-		LOCTEXT("PackagePluginTaskShortName", "Package Plugin Task"),
-		FEditorStyle::GetBrush(TEXT("MainFrame.CookContent")),
-		UatTask
+		}))
 	);
 }
+#pragma endregion
 
-TSharedRef<SDockTab> FHelloNeighborModModule::OnSpawnPluginTab(const FSpawnTabArgs& SpawnTabArgs)
+#pragma region Get All Mods | On Spawn Create Tab | Open Mod Editor
+TArray<FString> FHelloNeighborModModule::GetAllMods()
+{
+	TArray<FString> AllMods;
+	TArray<TSharedRef<IPlugin>> Plugins = IPluginManager::Get().GetDiscoveredPlugins();
+	for (TSharedRef<IPlugin> Plugin : Plugins)
+	{
+		if (Plugin->GetBaseDir().StartsWith(FPaths::ProjectModsDir()))
+			AllMods.Add(Plugin->GetName());
+	}
+	return AllMods;
+}
+
+TSharedRef<SDockTab> FHelloNeighborModModule::OnSpawnCreateTab(const FSpawnTabArgs& SpawnTabArgs)
 {
 	TSharedPtr<IPluginWizardDefinition> WizardDefinition = MakeShareable(new FModPluginWizardDefinition());
 	return IPluginBrowser::Get().SpawnPluginCreatorTab(SpawnTabArgs, WizardDefinition);
 }
-#undef LOCTEXT_NAMESPACE
 
+void FHelloNeighborModModule::OpenModEditor(TSharedRef<IPlugin> Plugin)
+{
+    UModMetadataObject* MetadataObject = NewObject<UModMetadataObject>();
+	MetadataObject->TargetIconPath = Plugin->GetBaseDir() / TEXT("Resources/Icon128.png");
+    MetadataObject->PopulateFromDescriptor(Plugin->GetDescriptor());
+    MetadataObject->AddToRoot();
+
+	FPropertyEditorModule& EditModule = FModuleManager::Get().GetModuleChecked<FPropertyEditorModule>("PropertyEditor");
+	TSharedRef<IDetailsView> PropertyView = EditModule.CreateDetailView(FDetailsViewArgs(false, false, false, FDetailsViewArgs::ActorsUseNameArea, true));
+	PropertyView->SetObject(MetadataObject, true);
+
+    TSharedPtr<SWindow> PropertiesWindow = SNew(SWindow)
+        .SupportsMaximize(false)
+        .SupportsMinimize(false)
+        .SizingRule(ESizingRule::FixedSize)
+        .ClientSize(FVector2D(700.0f, 575.0f))
+        .Title(LOCTEXT("PluginMetadataTitle", "Mod Properties"));
+
+    PropertiesWindow->SetContent(
+		SNew(SBorder)
+			.Padding(FMargin(8.0f, 8.0f))
+			[
+				SNew(SVerticalBox)
+
+				+SVerticalBox::Slot()
+				.AutoHeight()
+				.Padding(FMargin(5.0f, 10.0f, 5.0f, 5.0f))
+				[
+					SNew(STextBlock)
+					.Font(FEditorStyle::GetFontStyle("DetailsView.CategoryFontStyle"))
+					.Text(FText::FromString(Plugin->GetName()))
+				]
+
+				+ SVerticalBox::Slot()
+				.Padding(5)
+				[
+					PropertyView
+				]
+
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				.Padding(5)
+				.HAlign(HAlign_Right)
+				[
+					SNew(SButton)
+					.ContentPadding(FMargin(20.0f, 2.0f))
+					.Text(LOCTEXT("OkButtonLabel", "Ok"))
+					.OnClicked(FOnClicked::CreateRaw(this, &FHelloNeighborModModule::OnEditModFinished, MetadataObject, Plugin, PropertiesWindow))
+				]
+			]
+    );
+
+    FSlateApplication::Get().AddModalWindow(PropertiesWindow.ToSharedRef(), FGlobalTabmanager::Get()->GetRootWindow());
+}
+
+FReply FHelloNeighborModModule::OnEditModFinished(UModMetadataObject* MetadataObject, TSharedRef<IPlugin> Plugin, TSharedPtr<SWindow> PropertiesWindow)
+{
+    FPluginDescriptor OldDescriptor = Plugin->GetDescriptor();
+    FPluginDescriptor NewDescriptor = OldDescriptor;
+	
+    MetadataObject->CopyIntoDescriptor(NewDescriptor);
+    MetadataObject->RemoveFromRoot();
+	
+    if (PropertiesWindow.IsValid())
+        PropertiesWindow->RequestDestroyWindow();
+	
+    FString OldText;
+    OldDescriptor.Write(OldText);
+    FString NewText;
+    NewDescriptor.Write(NewText);
+
+    if (OldText.Compare(NewText, ESearchCase::CaseSensitive) != 0)
+    {
+        FString DescriptorFileName = Plugin->GetDescriptorFileName();
+    	
+        if (ISourceControlModule::Get().IsEnabled())
+        {
+            ISourceControlProvider& SourceControlProvider = ISourceControlModule::Get().GetProvider();
+            TSharedPtr<ISourceControlState, ESPMode::ThreadSafe> SourceControlState = SourceControlProvider.GetState(DescriptorFileName, EStateCacheUsage::ForceUpdate);
+            
+            if (SourceControlState.IsValid() && SourceControlState->CanCheckout())
+            {
+                SourceControlProvider.Execute(ISourceControlOperation::Create<FCheckOut>(), DescriptorFileName);
+            }
+        }
+    	
+        FText FailReason;
+        if (!Plugin->UpdateDescriptor(NewDescriptor, FailReason))
+        {
+            FMessageDialog::Open(EAppMsgType::Ok, FailReason);
+        }
+    }
+
+    return FReply::Handled();
+}
+#pragma endregion
+
+#undef LOCTEXT_NAMESPACE
 IMPLEMENT_MODULE(FHelloNeighborModModule, HelloNeighborMod)

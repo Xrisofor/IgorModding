@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ToolMenus.h"
 #include "Engine/DeveloperSettings.h"
 #include "HelloNeighborModSettings.generated.h"
 
@@ -60,6 +61,7 @@ class HELLONEIGHBORMOD_API UHelloNeighborModSettings : public UDeveloperSettings
 	GENERATED_BODY()
 
 public:
+	// Base
 	UPROPERTY(EditAnywhere, Config, meta=(ToolTip="Version string used in the packaging command line (-basedonreleaseversion)"))
 	FString BasedOnReleaseVersion = "1.0";
 	
@@ -69,7 +71,8 @@ public:
 		{ FText::FromString("Test Field Map"), FText::FromString("Simple map to try new things out"), TEXT("TestFieldMap"), TEXT("TestFieldMap128.png") },
 		{ FText::FromString("AI Setup Map"), FText::FromString("Basic map to learn AI setup"), TEXT("AISetupMap"), TEXT("AiSetupMap128.png") }
 	};
-
+	
+	// Platforms
 	UPROPERTY(EditAnywhere, Config, Category="Platforms", meta=(ToolTip="List of supported platforms for the build"))
 	TArray<FBuildPlatform> SupportedPlatforms = {
 		{ LOCTEXT("Pl_Win64", "Windows (64-bit)"), LOCTEXT("Pl_Win64_T", "Build for Windows"), "Launcher.Platform_Windows", "Win64", "" },
@@ -78,6 +81,10 @@ public:
 	};
 	
 public:
+	static UHelloNeighborModSettings* Get() { return GetMutableDefault<UHelloNeighborModSettings>(); }
+	
+	const FPluginTemplate* FindTemplateByName(const FText& Name) const { return Templates.FindByPredicate([&](const FPluginTemplate& T) { return T.TemplateName.EqualTo(Name); }); }
+	
 	virtual FName GetContainerName() const override { return FName("Project"); }
 	virtual FName GetCategoryName() const override { return FName("Plugins"); }
 	virtual FName GetSectionName() const override { return FName("HelloNeighborMod"); }

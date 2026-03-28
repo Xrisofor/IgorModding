@@ -15,7 +15,8 @@ public class HelloNeighborMod : ModuleRules
 				"CoreUObject",
 				"Engine",
 				"DeveloperSettings",
-				"Json"
+				"Json",
+				"Steamworks"
 			}
 		);
 
@@ -24,17 +25,30 @@ public class HelloNeighborMod : ModuleRules
 			{
 				"Projects",
 				"InputCore",
-				"UnrealEd",
-				"ToolMenus",
 				"Slate",
 				"SlateCore",
 				"EditorStyle",
-				"PluginBrowser",
-				"UATHelper",
+				"ToolMenus",
 				"DesktopPlatform",
 				"Settings",
-				"JsonUtilities"
+				"JsonUtilities",
+				"SharedSettingsWidgets"
 			}
 		);
+		
+		if (Target.bBuildEditor)
+		{
+			PrivateDependencyModuleNames.AddRange(
+				new string[]
+				{
+					"UnrealEd",
+					"PluginBrowser",
+					"PropertyEditor",
+					"MainFrame",
+					"UATHelper",
+					"SourceControl"
+				}
+			);
+		}
 	}
 }

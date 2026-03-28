@@ -3,9 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UObject/NoExportTypes.h"
-#include "Engine/DataTable.h"
-#include "Engine/AssetManager.h"
+#include "../Gameplay/Sosed/Sosed.h"
 #include "ModKit.generated.h"
 
 USTRUCT(BlueprintType)
@@ -26,6 +24,9 @@ struct FMod
     FString Author;
 
     UPROPERTY(BlueprintReadWrite)
+    FString Version;
+
+    UPROPERTY(BlueprintReadWrite)
     bool bIsBetaVersion;
 
     UPROPERTY(BlueprintReadWrite)
@@ -33,54 +34,14 @@ struct FMod
 };
 
 USTRUCT(BlueprintType)
-struct FModMap
+struct FModData : public FMod
 {
     GENERATED_BODY()
 
     UPROPERTY(BlueprintReadWrite)
     FAssetData AssetData;
 
-    UPROPERTY(BlueprintReadWrite)
-    FString ModName;
-
-    UPROPERTY(BlueprintReadWrite)
-    FString ModDescription;
-
-    UPROPERTY(BlueprintReadWrite)
-    FString ModAuthor;
-
-    UPROPERTY(BlueprintReadWrite)
-    bool bModIsBetaVersion;
-
-    UPROPERTY(BlueprintReadWrite)
-    FSlateBrush Brush;
-};
-
-USTRUCT(BlueprintType)
-struct FModNeighbor
-{
-    GENERATED_BODY()
-
-    UPROPERTY(BlueprintReadWrite)
-    FAssetData AssetData;
-
-    UPROPERTY(BlueprintReadWrite)
-    FString ModName;
-
-    UPROPERTY(BlueprintReadWrite)
-    FString ModDescription;
-
-    UPROPERTY(BlueprintReadWrite)
-    FString ModAuthor;
-
-    UPROPERTY(BlueprintReadWrite)
-    bool bModIsBetaVersion;
-
-    UPROPERTY(BlueprintReadWrite)
-    FSlateBrush Brush;
-
-    UPROPERTY()
-    TSoftClassPtr<class ASosed> NeighborClass;
+    bool IsValid() const { return AssetData.IsValid(); }
 };
 
 UCLASS()
@@ -89,8 +50,6 @@ class IGORMODDING_API UModKit : public UObject
     GENERATED_BODY()
 
 public:
-    UModKit() { NumActiveMap = -1; NumActiveNeighbor = -1; };
-    
     UFUNCTION()
     void FindMods();
 
@@ -99,45 +58,90 @@ public:
 
     UFUNCTION(BlueprintCallable)
     FString GetModsDirectory() const;
-    
-    UFUNCTION(BlueprintPure)
-    TArray<FModMap> GetAllModMaps() const { return AllModMaps; }
-
-    UFUNCTION(BlueprintPure)
-    TArray<FModNeighbor> GetAllModNeighbors() const { return AllModNeighbors; }
 
     UFUNCTION(BlueprintPure)
     TArray<FMod> GetAllMods() const { return AllMods; }
 
+#pragma region Maps
     UFUNCTION(BlueprintPure)
-    int32 GetNumModMap() const { return NumActiveMap; }
+    TArray<FModData> GetAllModMaps() const { return AllModMaps; }
+    
+    UFUNCTION(BlueprintPure)
+    bool GetActiveModMap(FModData& Mod, FName& MapName) const
+    {
+        if (ActiveMap.IsSet())
+        {
+            Mod = ActiveMap.GetValue();
+            MapName = ActiveMap->AssetData.AssetName;
+            return true;
+        }
+        return false;
+    };
 
     UFUNCTION(BlueprintPure)
-    int32 GetNumModNeighbor() const { return NumActiveNeighbor; }
-
-    UFUNCTION(BlueprintPure)
-    bool HasActiveModMap() const { return NumActiveMap >= 0; }
-
-    UFUNCTION(BlueprintPure)
-    bool HasActiveModNeighbor() const { return NumActiveNeighbor >= 0; }
-
-    UFUNCTION(BlueprintPure)
-    bool HasActiveMods() const { return HasActiveModMap() || HasActiveModNeighbor(); }
+    bool HasActiveModMap() const { return ActiveMap.IsSet() && ActiveMap->IsValid(); }
 
     UFUNCTION(BlueprintCallable)
-    void SetNumModMap(int32 Num) { NumActiveMap = Num; }
+    void SetActiveModMap(const FModData& Mod)
+    {
+        if (!Mod.IsValid())
+        {
+            ActiveMap.Reset();
+            return;
+        }
+
+        ActiveMap = Mod;
+    }
+#pragma endregion
+
+#pragma region Neighbors
+    UFUNCTION(BlueprintPure)
+    TArray<FModData> GetAllModNeighbors() const { return AllModNeighbors; }
+
+    UFUNCTION(BlueprintPure)
+    bool GetActiveModNeighbor(FModData& Mod, TSubclassOf<ASosed>& Class) const
+    {
+        if (ActiveNeighbor.IsSet())
+        {
+            Mod = ActiveNeighbor.GetValue();
+
+            FString GeneratedClassPath;
+            if (Mod.AssetData.GetTagValue(FBlueprintTags::GeneratedClassPath, GeneratedClassPath))
+            {
+                FSoftObjectPath SoftPath(GeneratedClassPath);
+                TSoftClassPtr<ASosed> ClassPtr(SoftPath);
+                Class = ClassPtr.LoadSynchronous();
+            }
+            
+            return true;
+        }
+        return false;
+    };
+
+    UFUNCTION(BlueprintPure)
+    bool HasActiveModNeighbor() const { return ActiveNeighbor.IsSet() && ActiveNeighbor->IsValid(); }
 
     UFUNCTION(BlueprintCallable)
-    void SetNumModNeighbor(int32 Num) { NumActiveNeighbor = Num; }
+    void SetActiveModNeighbor(const FModData& Mod)
+    {
+        if (!Mod.IsValid())
+        {
+            ActiveNeighbor.Reset();
+            return;
+        }
+
+        ActiveNeighbor = Mod;
+    }
+#pragma endregion
 
 private:
     TArray<FString> ModFoldersQueue;
     void ProcessNextMod();
     
     TArray<FMod> AllMods;
-    TArray<FModMap> AllModMaps;
-    TArray<FModNeighbor> AllModNeighbors;
+    TArray<FModData> AllModMaps;
+    TArray<FModData> AllModNeighbors;
 
-    int32 NumActiveMap;
-    int32 NumActiveNeighbor;
+    TOptional<FModData> ActiveMap;
+    TOptional<FModData> ActiveNeighbor;
 };

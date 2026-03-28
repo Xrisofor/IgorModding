@@ -3,31 +3,28 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ModMetadataObject.h"
 #include "Modules/ModuleManager.h"
-
-class FToolBarBuilder;
-class FMenuBuilder;
 
 static const FName HelloNeighborCreateNewModTabName("NewGameMod");
 
-class HELLONEIGHBORMOD_API FHelloNeighborModModule : public IModuleInterface
+class FHelloNeighborModModule : public IModuleInterface
 {
 public:
 	virtual void StartupModule() override;
 	virtual void ShutdownModule() override;
 	
-	void PluginButtonClicked() { FGlobalTabmanager::Get()->TryInvokeTab(HelloNeighborCreateNewModTabName); };
-	
 private:
 	void RegisterMenus();
-	TArray<FString> GetAllMods();
-	
-	TSharedRef<class SDockTab> OnSpawnPluginTab(const class FSpawnTabArgs& SpawnTabArgs);
+	void CreateButtonClicked() { FGlobalTabmanager::Get()->TryInvokeTab(HelloNeighborCreateNewModTabName); };
 
-	TSharedRef<class SWidget> GenerateModListWidget();
-	void GeneratePlatformMenu(FMenuBuilder& MenuBuilder, FString ModName);
-	void PackageSelectedMod(FString ModName, FString TargetPlatform, FString CookFlavor);
+	TArray<FString> GetAllMods();
+	TSharedRef<class SDockTab> OnSpawnCreateTab(const class FSpawnTabArgs& SpawnTabArgs);
+	void OpenModEditor(TSharedRef<class IPlugin> Plugin);
+	
+	TSharedRef<class SWidget> GenerateModMenu(bool bIsPublishMenu);
+	void FillPlatformSubMenu(class FMenuBuilder& MenuBuilder, FString ModName, bool bIsPublishMenu);
+
 private:
-	TSharedPtr<class FUICommandList> CreateModCommand;
-	TSharedPtr<class FUICommandList> PackageModCommands;
+	FReply OnEditModFinished(UModMetadataObject* ModMetadataObject, TSharedRef<class IPlugin> Plugin, TSharedPtr<SWindow> PropertiesWindow);
 };

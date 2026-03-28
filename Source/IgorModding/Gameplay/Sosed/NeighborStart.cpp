@@ -71,28 +71,19 @@ ANeighborStart::ANeighborStart(const FObjectInitializer& ObjectInitializer)
 void ANeighborStart::BeginPlay()
 {
 	Super::BeginPlay();
-	UClass* ResolvedClassToSpawn = nullptr;
+	TSubclassOf<ASosed> ResolvedClassToSpawn;
 	
 	UHelloNeighborRebornGameInstance* GameInstance = Cast<UHelloNeighborRebornGameInstance>(GetGameInstance());
-	if (GameInstance && GameInstance->GetModKit() && GameInstance->GetModKit()->HasActiveModNeighbor())
+	if (GameInstance && GameInstance->GetModKit())
 	{
-		const TArray<FModNeighbor>& ModNeighbors = GameInstance->GetModKit()->GetAllModNeighbors();
-		const int32 NeighborIndex = GameInstance->GetModKit()->GetNumModNeighbor();
-
-		if (ModNeighbors.IsValidIndex(NeighborIndex))
+		FModData NewNeighbor;
+		if (!GameInstance->GetModKit()->GetActiveModNeighbor(NewNeighbor, ResolvedClassToSpawn))
 		{
-			const TSoftClassPtr<ASosed>& ModNeighborClassPtr = ModNeighbors[NeighborIndex].NeighborClass;
-			
-			if (!ModNeighborClassPtr.IsNull())
-				ResolvedClassToSpawn = ModNeighborClassPtr.LoadSynchronous();
+			if (!ClassSpawn.IsNull())
+				ResolvedClassToSpawn = ClassSpawn.LoadSynchronous();
 		}
 	}
 	
-	if (!ResolvedClassToSpawn)
-	{
-		if (!ClassSpawn.IsNull())
-			ResolvedClassToSpawn = ClassSpawn.LoadSynchronous();
-	}
 	if (ResolvedClassToSpawn)
 	{
 		UWorld* World = GetWorld();

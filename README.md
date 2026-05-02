@@ -1,6 +1,6 @@
 # IgorModding
 
-> For Unreal Engine 4.27
+> For Unreal Engine 4.27 and higher
 
 The modification system was developed by Igor Belov or one of the tinyBuild programmers.
 
@@ -18,6 +18,12 @@ The modification system was developed by Igor Belov or one of the tinyBuild prog
     <img src="Resources/GameInstance.png" /><br />
     GameInstance
 </div>
+
+## Unreal Engine 5 Specifics
+When using UE5, the build architecture is more restrictive. To ensure the project compiles and mods load correctly, please note:
+
+1. **No IO Store Support**: This modding system relies on the legacy .pak file format. The new IO Store system (.utoc / .ucas) introduced in UE5 for optimization is not supported. You must disable it in your Project Launcher profile when cooking both the base game and the mods.
+2. **Platform Naming**: UE5 refers to the desktop platform simply as Windows, whereas UE4 used WindowsNoEditor.
 
 ## How to Compile the Game Correctly
 

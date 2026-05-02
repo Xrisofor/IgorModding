@@ -12,7 +12,7 @@ public class IgorModdingEditorTarget : TargetRules
 		
 		bOverrideBuildEnvironment = true;
 		
-		DefaultBuildSettings = BuildSettingsVersion.V2;
+		DefaultBuildSettings = BuildSettingsVersion.Latest;
 		
 		if (Target.Version.MajorVersion >= 5)
 		{

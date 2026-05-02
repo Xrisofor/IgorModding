@@ -3,7 +3,17 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Runtime/Launch/Resources/Version.h"
+#include "Styling/SlateBrush.h"
+#include "Engine/Blueprint.h"
 #include "../Gameplay/Sosed/Sosed.h"
+
+#if ENGINE_MAJOR_VERSION >= 5
+    #include "AssetRegistry/AssetData.h"
+#else
+    #include "AssetData.h"
+#endif
+
 #include "ModKit.generated.h"
 
 USTRUCT(BlueprintType)
@@ -106,17 +116,27 @@ public:
             Mod = ActiveNeighbor.GetValue();
 
             FString GeneratedClassPath;
-            if (Mod.AssetData.GetTagValue(FBlueprintTags::GeneratedClassPath, GeneratedClassPath))
+            if (!Mod.AssetData.GetTagValue(FBlueprintTags::GeneratedClassPath, GeneratedClassPath) || GeneratedClassPath.IsEmpty())
+            {
+#if ENGINE_MAJOR_VERSION >= 5
+                FString ObjectPath = Mod.AssetData.GetSoftObjectPath().ToString();
+                if (!ObjectPath.EndsWith(TEXT("_C")))
+                    ObjectPath += TEXT("_C");
+                GeneratedClassPath = ObjectPath;
+#endif
+            }
+
+            if (!GeneratedClassPath.IsEmpty())
             {
                 FSoftObjectPath SoftPath(GeneratedClassPath);
                 TSoftClassPtr<ASosed> ClassPtr(SoftPath);
                 Class = ClassPtr.LoadSynchronous();
             }
-            
+        
             return true;
         }
         return false;
-    };
+    }
 
     UFUNCTION(BlueprintPure)
     bool HasActiveModNeighbor() const { return ActiveNeighbor.IsSet() && ActiveNeighbor->IsValid(); }

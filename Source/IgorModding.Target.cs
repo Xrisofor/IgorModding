@@ -1,14 +1,33 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 using UnrealBuildTool;
-using System.Collections.Generic;
+using System;
 
 public class IgorModdingTarget : TargetRules
 {
-	public IgorModdingTarget( TargetInfo Target) : base(Target)
+	public IgorModdingTarget(TargetInfo Target) : base(Target)
 	{
 		Type = TargetType.Game;
-		DefaultBuildSettings = BuildSettingsVersion.V2;
 		ExtraModuleNames.AddRange( new string[] { "IgorModding" } );
+		
+		bOverrideBuildEnvironment = true;
+		
+		DefaultBuildSettings = BuildSettingsVersion.V2;
+		
+		if (Target.Version.MajorVersion >= 5)
+		{
+			try
+			{
+				System.Reflection.PropertyInfo BuildProp = this.GetType().GetProperty("DefaultBuildSettings");
+				if (BuildProp != null) BuildProp.SetValue(this, Enum.Parse(BuildProp.PropertyType, "Latest"));
+				
+				System.Reflection.PropertyInfo IncludeProp = this.GetType().GetProperty("IncludeOrderVersion");
+				if (IncludeProp != null) IncludeProp.SetValue(this, Enum.Parse(IncludeProp.PropertyType, "Latest"));
+				
+				System.Reflection.PropertyInfo CppProp = this.GetType().GetProperty("CppStandard");
+				if (CppProp != null) CppProp.SetValue(this, Enum.Parse(CppProp.PropertyType, "Latest"));
+			}
+			catch (Exception) { }
+		}
 	}
 }

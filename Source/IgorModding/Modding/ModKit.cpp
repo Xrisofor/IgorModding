@@ -3,11 +3,15 @@
 #include "ModKit.h"
 #include "Misc/Paths.h"
 #include "HAL/FileManager.h"
-#include "AssetRegistryModule.h"
+#include "AssetRegistry/AssetRegistryModule.h"
 #include "Interfaces/IPluginManager.h"
-#include "UObject/SoftObjectPath.h"
 #include "Logging/LogMacros.h"
 #include "Kismet/KismetRenderingLibrary.h"
+#include "Engine/World.h"
+#include "Engine/Texture2D.h"
+#include "TimerManager.h"
+#include "Brushes/SlateNoResource.h"
+#include "Engine/BlueprintGeneratedClass.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogModKit, Log, All);
 
@@ -63,7 +67,8 @@ void UModKit::ProcessNextMod()
 
     if (!Plugin.IsValid())
     {
-        GetWorld()->GetTimerManager().SetTimerForNextTick(this, &UModKit::ProcessNextMod);
+        if (GetWorld())
+            GetWorld()->GetTimerManager().SetTimerForNextTick(this, &UModKit::ProcessNextMod);
         return;
     }
     
@@ -71,6 +76,8 @@ void UModKit::ProcessNextMod()
     IAssetRegistry& AssetRegistry = AssetRegistryModule.Get();
     
     FString PluginContentPath = Plugin->GetMountedAssetPath();
+    if (PluginContentPath.EndsWith(TEXT("/")))
+        PluginContentPath.LeftChopInline(1);
     AssetRegistry.ScanPathsSynchronous({ PluginContentPath }, true);
     
     FMod NewMod;
@@ -103,35 +110,72 @@ void UModKit::ProcessNextMod()
     FARFilter Filter;
     Filter.PackagePaths.Add(FName(*PluginContentPath));
     Filter.bRecursivePaths = true;
+
+#if ENGINE_MAJOR_VERSION >= 5
+    Filter.ClassPaths.Add(UWorld::StaticClass()->GetClassPathName());
+    Filter.ClassPaths.Add(UBlueprint::StaticClass()->GetClassPathName());
+    Filter.ClassPaths.Add(UBlueprintGeneratedClass::StaticClass()->GetClassPathName());
+#else
     Filter.ClassNames.Add(UWorld::StaticClass()->GetFName());
     Filter.ClassNames.Add(UBlueprint::StaticClass()->GetFName());
+    Filter.ClassNames.Add(UBlueprintGeneratedClass::StaticClass()->GetFName());
+#endif
 
     TArray<FAssetData> ModAssets;
     AssetRegistry.GetAssets(Filter, ModAssets);
 
+    static const FName NAME_Blueprint = FName(TEXT("Blueprint"));
+    static const FName NAME_BlueprintGeneratedClass = FName(TEXT("BlueprintGeneratedClass"));
+    static const FName NAME_World = FName(TEXT("World"));
+    
     for (const FAssetData& Asset : ModAssets)
     {
-        UE_LOG(LogModKit, Display, TEXT("Class PackagePath=%s"), *Asset.PackagePath.ToString());
-        UE_LOG(LogModKit, Display, TEXT("Asset AssetName=%s, AssetClass=%s"), *Asset.AssetName.ToString(), *Asset.AssetClass.ToString());
-
-        FString ClassTextPath = Asset.ObjectPath.ToString();
-        if (Asset.AssetClass == UBlueprint::StaticClass()->GetFName())
-            ClassTextPath = FString::Printf(TEXT("BlueprintGeneratedClass'%s'"), *(ClassTextPath + TEXT("_C")));
-
-        UE_LOG(LogModKit, Display, TEXT("ClassPath=%s, ClassTextPath=%s"), *Asset.ObjectPath.ToString(), *ClassTextPath);
+#if ENGINE_MAJOR_VERSION >= 5
+        FString CurrentObjectPath = Asset.GetSoftObjectPath().ToString();
+        FName CurrentAssetClass = Asset.AssetClassPath.GetAssetName();
+#else
+        FString CurrentObjectPath = Asset.ObjectPath.ToString();
+        FName CurrentAssetClass = Asset.AssetClass;
+#endif
         
-        if (Asset.AssetClass == UWorld::StaticClass()->GetFName())
+        UE_LOG(LogModKit, Display, TEXT("Class PackagePath=%s"), *Asset.PackagePath.ToString());
+        UE_LOG(LogModKit, Display, TEXT("Asset AssetName=%s, AssetClass=%s"), *Asset.AssetName.ToString(), *CurrentAssetClass.ToString());
+
+        FString ClassTextPath = CurrentObjectPath;
+        if (CurrentAssetClass == UBlueprint::StaticClass()->GetFName())
+            ClassTextPath = FString::Printf(TEXT("BlueprintGeneratedClass'%s'"), *(CurrentObjectPath + TEXT("_C")));
+        
+        UE_LOG(LogModKit, Display, TEXT("ClassPath=%s, ClassTextPath=%s"), *CurrentObjectPath, *ClassTextPath);
+        
+        if (CurrentAssetClass == NAME_World)
         {
             FModData NewMap;
             static_cast<FMod&>(NewMap) = NewMod; 
             NewMap.AssetData = Asset;
             AllModMaps.Add(NewMap);
         }
-        else if (Asset.AssetClass == UBlueprint::StaticClass()->GetFName())
+        else if (CurrentAssetClass == NAME_Blueprint || CurrentAssetClass == NAME_BlueprintGeneratedClass)
         {
             FString ParentClassPath;
-            if (Asset.GetTagValue(FBlueprintTags::NativeParentClassPath, ParentClassPath))
-            {
+            bool bFoundParent = Asset.GetTagValue(FBlueprintTags::NativeParentClassPath, ParentClassPath) || 
+                                Asset.GetTagValue(FBlueprintTags::ParentClassPath, ParentClassPath);
+
+#if ENGINE_MAJOR_VERSION >= 5
+                if (!bFoundParent || ParentClassPath.IsEmpty())
+                {
+                    FSoftObjectPath SoftPath(CurrentObjectPath);
+                    TSoftClassPtr<UObject> SoftClass(SoftPath);
+                    UClass* LoadedClass = SoftClass.LoadSynchronous();
+        
+                    if (LoadedClass && LoadedClass->IsChildOf(ASosed::StaticClass()))
+                    {
+                        FModData NewNeighbor;
+                        static_cast<FMod&>(NewNeighbor) = NewMod;
+                        NewNeighbor.AssetData = Asset;
+                        AllModNeighbors.Add(NewNeighbor);
+                    }
+                }
+#else
                 if (ParentClassPath.Contains(TEXT("Sosed")))
                 {
                     FModData NewNeighbor;
@@ -139,9 +183,10 @@ void UModKit::ProcessNextMod()
                     NewNeighbor.AssetData = Asset;
                     AllModNeighbors.Add(NewNeighbor);
                 }
-            }
+#endif
         }
     }
     
-    GetWorld()->GetTimerManager().SetTimerForNextTick(this, &UModKit::ProcessNextMod);
+    if (GetWorld())
+        GetWorld()->GetTimerManager().SetTimerForNextTick(this, &UModKit::ProcessNextMod);
 }

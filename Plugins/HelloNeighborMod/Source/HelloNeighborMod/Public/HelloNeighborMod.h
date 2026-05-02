@@ -4,6 +4,8 @@
 
 #include "CoreMinimal.h"
 #include "ModMetadataObject.h"
+#include "Framework/Docking/TabManager.h"
+#include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"
 
 static const FName HelloNeighborCreateNewModTabName("NewGameMod");

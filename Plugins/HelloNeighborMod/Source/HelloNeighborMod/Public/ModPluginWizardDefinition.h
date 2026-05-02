@@ -2,9 +2,13 @@
 
 #pragma once
 
+#include "CoreMinimal.h"
+#include "Runtime/Launch/Resources/Version.h"
 #include "IPluginWizardDefinition.h"
 #include "PluginDescriptor.h"
+#include "Features/IPluginsEditorFeature.h"
 #include "Widgets/SNullWidget.h"
+#include "Styling/SlateTypes.h"
 
 class HELLONEIGHBORMOD_API FModPluginWizardDefinition : public IPluginWizardDefinition
 {
@@ -12,15 +16,21 @@ public:
 	FModPluginWizardDefinition();
 	
 	virtual const TArray<TSharedRef<FPluginTemplateDescription>>& GetTemplatesSource() const override { return TemplateDefinitions; };
-	virtual void OnTemplateSelectionChanged(TArray<TSharedRef<FPluginTemplateDescription>> InSelectedItems, ESelectInfo::Type SelectInfo) override;
-	virtual TArray<TSharedPtr<FPluginTemplateDescription>> GetSelectedTemplates() const override;
 	virtual void ClearTemplateSelection() override { CurrentTemplateDefinition.Reset(); };
 	virtual bool HasValidTemplateSelection() const override { return CurrentTemplateDefinition.IsValid(); };
 
+#if ENGINE_MAJOR_VERSION >= 5
+	virtual void OnTemplateSelectionChanged(TSharedPtr<FPluginTemplateDescription> InSelectedItem, ESelectInfo::Type SelectInfo) override;
+	virtual TSharedPtr<FPluginTemplateDescription> GetSelectedTemplate() const override;
+#else
+	virtual void OnTemplateSelectionChanged(TArray<TSharedRef<FPluginTemplateDescription>> InSelectedItems, ESelectInfo::Type SelectInfo) override;
+	virtual TArray<TSharedPtr<FPluginTemplateDescription>> GetSelectedTemplates() const override;
 	virtual ESelectionMode::Type GetSelectionMode() const override { return ESelectionMode::Type::Multi; }
-	virtual bool AllowsEnginePlugins() const override { return false; };
+#endif
+
+	virtual bool AllowsEnginePlugins() const { return false; };
 	virtual bool CanShowOnStartup() const override { return true; }
-	virtual bool CanContainContent() const override { return true; };
+	virtual bool CanContainContent() const { return true; };
 	virtual bool HasModules() const override { return false; };
 	virtual bool IsMod() const override { return true; };
 	virtual void OnShowOnStartupCheckboxChanged(ECheckBoxState CheckBoxState) override { ShowOnStartupState = CheckBoxState; }

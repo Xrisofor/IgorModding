@@ -11,6 +11,7 @@
 #include "DetailLayoutBuilder.h"
 #include "DetailWidgetRow.h"
 #include "DetailCategoryBuilder.h"
+#include "Editor.h"
 #include "SExternalImageReference.h"
 
 #pragma region Mod Metadata Object

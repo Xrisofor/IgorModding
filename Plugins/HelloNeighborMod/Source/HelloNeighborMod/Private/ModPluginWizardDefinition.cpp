@@ -9,6 +9,9 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Serialization/JsonSerializer.h"
+#include "Features/IPluginsEditorFeature.h"
+#include "Widgets/Images/SImage.h"
+#include "Widgets/SBoxPanel.h"
 
 FModPluginWizardDefinition::FModPluginWizardDefinition()
 {
@@ -18,7 +21,7 @@ FModPluginWizardDefinition::FModPluginWizardDefinition()
 
 FText FModPluginWizardDefinition::GetInstructions() const
 {
-	return FText::FromString(TEXT("Select the content you want to first create in your mod, then give your mod a name to create it.\n\nUse Ctrl+Click to select multiple options, or Shift+Click to select a range of options."));
+	return FText::FromString(TEXT("Select the content you want to first create in your mod, then give your mod a name to create it."));
 }
 
 bool FModPluginWizardDefinition::GetPluginIconPath(FString& OutIconPath) const
@@ -27,10 +30,20 @@ bool FModPluginWizardDefinition::GetPluginIconPath(FString& OutIconPath) const
 	return true;
 }
 
+#if ENGINE_MAJOR_VERSION >= 5
+void FModPluginWizardDefinition::OnTemplateSelectionChanged(TSharedPtr<FPluginTemplateDescription> InSelectedItem, ESelectInfo::Type SelectInfo)
+{
+	CurrentTemplateDefinition = InSelectedItem;
+}
+
+TSharedPtr<FPluginTemplateDescription> FModPluginWizardDefinition::GetSelectedTemplate() const
+{
+	return CurrentTemplateDefinition;
+}
+#else
 void FModPluginWizardDefinition::OnTemplateSelectionChanged(TArray<TSharedRef<FPluginTemplateDescription>> InSelectedItems, ESelectInfo::Type SelectInfo)
 {
 	CurrentTemplateDefinition.Reset();
-	
 	if (InSelectedItems.Num() > 0)
 	{
 		CurrentTemplateDefinition = InSelectedItems[0];
@@ -44,9 +57,9 @@ TArray<TSharedPtr<FPluginTemplateDescription>> FModPluginWizardDefinition::GetSe
 	{
 		Selection.Add(CurrentTemplateDefinition);
 	}
-
 	return Selection;
 }
+#endif
 
 TSharedPtr<class SWidget> FModPluginWizardDefinition::GetCustomHeaderWidget()
 {
@@ -61,26 +74,12 @@ TSharedPtr<class SWidget> FModPluginWizardDefinition::GetCustomHeaderWidget()
 
 EHostType::Type FModPluginWizardDefinition::GetPluginModuleDescriptor() const
 {
-	EHostType::Type ModuleDescriptorType = EHostType::Runtime;
-
-	if (CurrentTemplateDefinition.IsValid())
-	{
-		ModuleDescriptorType = CurrentTemplateDefinition->ModuleDescriptorType;
-	}
-
-	return ModuleDescriptorType;
+	return CurrentTemplateDefinition.IsValid() ? CurrentTemplateDefinition->ModuleDescriptorType : EHostType::Runtime;
 }
 
 ELoadingPhase::Type FModPluginWizardDefinition::GetPluginLoadingPhase() const
 {
-	ELoadingPhase::Type Phase = ELoadingPhase::Default;
-
-	if (CurrentTemplateDefinition.IsValid())
-	{
-		Phase = CurrentTemplateDefinition->LoadingPhase;
-	}
-
-	return Phase;
+	return CurrentTemplateDefinition.IsValid() ? CurrentTemplateDefinition->LoadingPhase : ELoadingPhase::Default;
 }
 
 bool FModPluginWizardDefinition::GetTemplateIconPath(TSharedRef<FPluginTemplateDescription> InTemplate, FString& OutIconPath) const
@@ -101,12 +100,10 @@ bool FModPluginWizardDefinition::GetTemplateIconPath(TSharedRef<FPluginTemplateD
 TArray<FString> FModPluginWizardDefinition::GetFoldersForSelection() const
 {
 	TArray<FString> SelectedFolders;
-
 	if (CurrentTemplateDefinition.IsValid())
 	{
 		SelectedFolders.Add(GetFolderForTemplate(CurrentTemplateDefinition.ToSharedRef()));
 	}
-
 	return SelectedFolders;
 }
 
@@ -124,45 +121,24 @@ void FModPluginWizardDefinition::PopulateTemplatesSource()
 
 void FModPluginWizardDefinition::PluginCreated(const FString& PluginName, bool bWasSuccessful) const
 {
-	if (!bWasSuccessful)
-		return;
-	
-	FString ProjectFilePath = FPaths::ConvertRelativePathToFull(FPaths::GetProjectFilePath());
-	
-	FString ProjectJsonStr;
-	if (!FFileHelper::LoadFileToString(ProjectJsonStr, *ProjectFilePath))
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Failed to load project file: %s"), *ProjectFilePath);
-		return;
-	}
-	
-	TSharedPtr<FJsonObject> JsonObject;
-	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ProjectJsonStr);
-	if (!FJsonSerializer::Deserialize(Reader, JsonObject) || !JsonObject.IsValid())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Failed to parse project JSON: %s"), *ProjectFilePath);
-		return;
-	}
-	
-	if (JsonObject->HasField("AdditionalPluginDirectories"))
-	{
-		JsonObject->RemoveField("AdditionalPluginDirectories");
-		UE_LOG(LogTemp, Display, TEXT("Removed AdditionalPluginDirectories from project file"));
-	}
-	
-	FString OutputString;
-	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutputString);
-	if (!FJsonSerializer::Serialize(JsonObject.ToSharedRef(), Writer))
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Failed to serialize project JSON: %s"), *ProjectFilePath);
-		return;
-	}
-
-	if (!FFileHelper::SaveStringToFile(OutputString, *ProjectFilePath))
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Failed to save project file: %s"), *ProjectFilePath);
-		return;
-	}
-
-	UE_LOG(LogTemp, Display, TEXT("PluginCreated cleanup completed for %s"), *PluginName);
+    if (!bWasSuccessful) return;
+    
+    FString ProjectFilePath = FPaths::ConvertRelativePathToFull(FPaths::GetProjectFilePath());
+    FString ProjectJsonStr;
+    if (!FFileHelper::LoadFileToString(ProjectJsonStr, *ProjectFilePath)) return;
+    
+    TSharedPtr<FJsonObject> JsonObject;
+    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ProjectJsonStr);
+    if (!FJsonSerializer::Deserialize(Reader, JsonObject) || !JsonObject.IsValid()) return;
+    
+    if (JsonObject->HasField("AdditionalPluginDirectories"))
+    {
+        JsonObject->RemoveField("AdditionalPluginDirectories");
+        FString OutputString;
+        TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutputString);
+        if (FJsonSerializer::Serialize(JsonObject.ToSharedRef(), Writer))
+        {
+            FFileHelper::SaveStringToFile(OutputString, *ProjectFilePath);
+        }
+    }
 }

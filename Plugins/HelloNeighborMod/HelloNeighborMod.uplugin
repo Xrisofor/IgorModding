@@ -16,7 +16,7 @@
 		{
 			"Name": "HelloNeighborMod",
 			"Type": "Editor",
-			"LoadingPhase": "Default"
+			"LoadingPhase": "PostEngineInit"
 		}
 	]
 }

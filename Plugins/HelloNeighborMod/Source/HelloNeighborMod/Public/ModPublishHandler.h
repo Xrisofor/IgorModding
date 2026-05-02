@@ -2,14 +2,22 @@
 
 #pragma once
 
+#pragma once
+
 #include "CoreMinimal.h"
 #include "TickableEditorObject.h"
 #include "Widgets/Notifications/SNotificationList.h"
 #include "Interfaces/IPluginManager.h"
 
 #if PLATFORM_WINDOWS || PLATFORM_MAC || PLATFORM_LINUX
-#include "ThirdParty/Steamworks/Steamv151/sdk/public/steam/steam_api.h"
-#include "ThirdParty/Steamworks/Steamv151/sdk/public/steam/isteamugc.h"
+	#include "Runtime/Launch/Resources/Version.h"
+	#if ENGINE_MAJOR_VERSION >= 5
+		#include "steam/steam_api.h"
+		#include "steam/isteamugc.h"
+	#else
+		#include "ThirdParty/Steamworks/Steamv151/sdk/public/steam/steam_api.h"
+		#include "ThirdParty/Steamworks/Steamv151/sdk/public/steam/isteamugc.h"
+	#endif
 #endif
 
 class FModPublishHandler : public FTickableEditorObject

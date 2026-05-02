@@ -10,6 +10,7 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/BillboardComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "Engine/World.h"
 
 ANeighborStart::ANeighborStart(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)

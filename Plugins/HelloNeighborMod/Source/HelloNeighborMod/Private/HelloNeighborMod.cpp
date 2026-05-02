@@ -11,10 +11,7 @@
 
 #include "PropertyEditorModule.h"
 #include "IDetailsView.h"
-#include "Widgets/SWindow.h"
-#include "PropertyEditorModule.h"
 #include "Modules/ModuleManager.h"
-#include "Widgets/SWindow.h"
 
 #include "IPluginBrowser.h"
 #include "ISourceControlOperation.h"
@@ -23,10 +20,31 @@
 #include "ISourceControlModule.h"
 
 #include "ToolMenus.h"
+#include "Framework/Application/SlateApplication.h"
 #include "Interfaces/IPluginManager.h"
 #include "Framework/Docking/TabManager.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "Misc/FileHelper.h"
+#include "HAL/PlatformFileManager.h"
+#include "Misc/ConfigCacheIni.h"
+#include "Misc/MessageDialog.h"
+
+#include "Widgets/SWindow.h"
+#include "Widgets/Layout/SBorder.h"
+#include "Widgets/Text/STextBlock.h"
+#include "Widgets/Input/SButton.h"
+#include "Widgets/Images/SImage.h"
+
+#include "Runtime/Launch/Resources/Version.h"
+#if ENGINE_MAJOR_VERSION >= 5
+	#include "Styling/AppStyle.h"
+	#define DEFAULT_EDITOR_STYLE FAppStyle
+	#define GET_EDITOR_STYLE_NAME FAppStyle::GetAppStyleSetName()
+#else
+	#include "EditorStyleSet.h"
+	#define DEFAULT_EDITOR_STYLE FEditorStyle
+	#define GET_EDITOR_STYLE_NAME FEditorStyle::GetStyleSetName()
+#endif
 
 #define LOCTEXT_NAMESPACE "FHelloNeighborModModule"
 
@@ -52,7 +70,7 @@ void FHelloNeighborModModule::StartupModule()
 
 	FPropertyEditorModule& PropertyModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
 	PropertyModule.RegisterCustomClassLayout(
-		UModMetadataObject::StaticClass()->GetFName(),
+		"ModMetadataObject",
 		FOnGetDetailCustomizationInstance::CreateStatic(&FModPluginMetadataCustomization::MakeInstance)
 	);
 	PropertyModule.NotifyCustomizationModuleChanged();
@@ -67,7 +85,7 @@ void FHelloNeighborModModule::ShutdownModule()
 	if (FModuleManager::Get().IsModuleLoaded("PropertyEditor"))
 	{
 		FPropertyEditorModule& PropertyModule = FModuleManager::GetModuleChecked<FPropertyEditorModule>("PropertyEditor");
-		PropertyModule.UnregisterCustomClassLayout(UModMetadataObject::StaticClass()->GetFName());
+		PropertyModule.UnregisterCustomClassLayout("ModMetadataObject");
 	}
 
 	SteamAPI_RunCallbacks();
@@ -83,35 +101,62 @@ void FHelloNeighborModModule::ShutdownModule()
 void FHelloNeighborModModule::RegisterMenus()
 {
 	FToolMenuOwnerScoped OwnerScoped(this);
-	UToolMenu* Toolbar = UToolMenus::Get()->ExtendMenu("LevelEditor.LevelEditorToolBar");
-	FToolMenuSection& Section = Toolbar->FindOrAddSection("PlayToolBar");
 	
-	Section.AddEntry(FToolMenuEntry::InitToolBarButton(
-		"CreateModButton",
-		FUIAction(FExecuteAction::CreateRaw(this, &FHelloNeighborModModule::CreateButtonClicked)),
-		LOCTEXT("CreateModLabel", "Create Mod"),
-		LOCTEXT("CreateModTooltip", "Create a new mod using templates"),
-		FSlateIcon(FHelloNeighborModStyle::Get().GetStyleSetName(), "HelloNeighborMod.CreateNewMod")
-	));
-	
-	Section.AddEntry(FToolMenuEntry::InitComboButton(
-		"PackageMenu", FUIAction(),
-		FOnGetContent::CreateRaw(this, &FHelloNeighborModModule::GenerateModMenu, false),
-		LOCTEXT("PackageMod", "Package Mod"),
-		LOCTEXT("PackageModTooltip", "Select a mod and platform to package"),
-		FSlateIcon(FHelloNeighborModStyle::Get().GetStyleSetName(), "HelloNeighborMod.PackageMod")
-	));
-	
-	if (SteamAPI_Init() && SteamUser()->BLoggedOn())
+	FName ToolbarName = (ENGINE_MAJOR_VERSION >= 5) 
+			? "LevelEditor.LevelEditorToolBar.PlayToolBar" 
+			: "LevelEditor.LevelEditorToolBar";
+
+	UToolMenu* Toolbar = UToolMenus::Get()->ExtendMenu(ToolbarName);
+	if (Toolbar)
 	{
-		Section.AddEntry(FToolMenuEntry::InitComboButton(
-			"PublicationMenu", FUIAction(),
-			FOnGetContent::CreateRaw(this, &FHelloNeighborModModule::GenerateModMenu, true),
-			LOCTEXT("PublishMod", "Upload Mod"),
-			LOCTEXT("PublishModTooltip", "Upload your mods to the Workshop"),
-			FSlateIcon(FHelloNeighborModStyle::Get().GetStyleSetName(), "HelloNeighborMod.PublicationMod")
-		));
+		FToolMenuSection& Section = Toolbar->FindOrAddSection("HelloNeighborMod");
+		
+		FToolMenuEntry CreateModEntry = FToolMenuEntry::InitToolBarButton(
+			"CreateModButton",
+			FUIAction(FExecuteAction::CreateRaw(this, &FHelloNeighborModModule::CreateButtonClicked)),
+			LOCTEXT("CreateModLabel", "Create Mod"),
+			LOCTEXT("CreateModTooltip", "Create a new mod using templates"),
+			FSlateIcon(FHelloNeighborModStyle::Get().GetStyleSetName(), "HelloNeighborMod.CreateNewMod")
+		);
+		
+#if ENGINE_MAJOR_VERSION >= 5
+		CreateModEntry.StyleNameOverride = "CalloutToolbar";
+#endif
+		Section.AddEntry(CreateModEntry);
+		
+		FToolMenuEntry PackageEntry = FToolMenuEntry::InitComboButton(
+			"PackageMenu", 
+			FUIAction(),
+			FOnGetContent::CreateRaw(this, &FHelloNeighborModModule::GenerateModMenu, false),
+			LOCTEXT("PackageMod", "Package Mod"),
+			LOCTEXT("PackageModTooltip", "Select a mod and platform to package"),
+			FSlateIcon(FHelloNeighborModStyle::Get().GetStyleSetName(), "HelloNeighborMod.PackageMod")
+		);
+
+#if ENGINE_MAJOR_VERSION >= 5
+		CreateModEntry.StyleNameOverride = "CalloutToolbar";
+#endif
+		Section.AddEntry(PackageEntry);
+		
+		if (SteamAPI_Init() && SteamUser()->BLoggedOn())
+		{
+			FToolMenuEntry PublishEntry = FToolMenuEntry::InitComboButton(
+				"PublicationMenu", 
+				FUIAction(),
+				FOnGetContent::CreateRaw(this, &FHelloNeighborModModule::GenerateModMenu, true),
+				LOCTEXT("PublishMod", "Upload Mod"),
+				LOCTEXT("PublishModTooltip", "Upload your mods to the Workshop"),
+				FSlateIcon(FHelloNeighborModStyle::Get().GetStyleSetName(), "HelloNeighborMod.PublicationMod")
+			);
+
+#if ENGINE_MAJOR_VERSION >= 5
+			CreateModEntry.StyleNameOverride = "CalloutToolbar";
+#endif
+			Section.AddEntry(PublishEntry);
+		}
 	}
+	
+	UToolMenus::Get()->RefreshAllWidgets();
 }
 #pragma endregion 
 
@@ -167,7 +212,7 @@ void FHelloNeighborModModule::FillPlatformSubMenu(FMenuBuilder& MenuBuilder, FSt
 
 		MenuBuilder.AddMenuEntry(
 			Label, Tooltip,
-			FSlateIcon(FEditorStyle::GetStyleSetName(), Platform.IconName),
+			FSlateIcon(GET_EDITOR_STYLE_NAME, Platform.IconName),
 			FUIAction(FExecuteAction::CreateLambda([ModName, Platform, bIsPublishMenu]() {
 				if (bIsPublishMenu)
 					FModPublishHandler::Get().PublishMod(ModName, Platform.PlatformName);
@@ -242,7 +287,7 @@ void FHelloNeighborModModule::OpenModEditor(TSharedRef<IPlugin> Plugin)
 				.Padding(FMargin(5.0f, 10.0f, 5.0f, 5.0f))
 				[
 					SNew(STextBlock)
-					.Font(FEditorStyle::GetFontStyle("DetailsView.CategoryFontStyle"))
+					.Font(DEFAULT_EDITOR_STYLE::GetFontStyle("DetailsView.CategoryFontStyle"))
 					.Text(FText::FromString(Plugin->GetName()))
 				]
 

@@ -5,13 +5,29 @@
 #include "Interfaces/IPluginManager.h"
 #include "IUATHelperModule.h"
 #include "Async/Async.h"
+#include "HAL/PlatformFileManager.h"
+
+#include "Runtime/Launch/Resources/Version.h"
+#if ENGINE_MAJOR_VERSION >= 5
+    #include "Styling/AppStyle.h"
+    #define DEFAULT_EDITOR_STYLE FAppStyle
+#else
+    #include "EditorStyleSet.h"
+    #define DEFAULT_EDITOR_STYLE FEditorStyle
+#endif
 
 FString FModPackageHandler::GetStageFolderName(FString Platform, FString Flavor)
 {
     // (Win32, Win64, HoloLens, Mac, XboxOne, PS4, IOS, Android, HTML5, Linux, LinuxAArch64, AllDesktop, TVOS, Switch, Lumin)
-    
+
+#if ENGINE_MAJOR_VERSION >= 5
+    if (Platform == "Win64") return TEXT("Windows");
+    if (Platform == "Linux") return TEXT("Linux");
+#else
     if (Platform == "Win64") return TEXT("WindowsNoEditor");
     if (Platform == "Linux") return TEXT("LinuxNoEditor");
+#endif
+    
     if (Platform == "Android") return Flavor.IsEmpty() ? TEXT("Android") : FString::Printf(TEXT("Android_%s"), *Flavor);
     return Platform;
 }
@@ -39,24 +55,44 @@ void FModPackageHandler::PackageMod(FString ModName, FString TargetPlatform, FSt
         TEXT("BuildCookRun -project=\"%s\" -noP4 -clientconfig=Development -nocompile -nocompileeditor -installed -ue4exe=%s -utf8output %s -cook -unversionedcookedcontent -pak -dlcname=\"%s\" -DLCIncludeEngineContent -basedonreleaseversion=%s -stage -archive -archivedirectory=\"%s\""),
         *ProjectPath, *EditorExe, *PlatformArgs, *ModName, *UHelloNeighborModSettings::Get()->BasedOnReleaseVersion, *ArchivePath
     );
-
-    IUATHelperModule::Get().CreateUatTask(
-        CommandLine,
-        FText::Format(NSLOCTEXT("HelloNeighborMod", "PkgTask", "{0} ({1})"), FText::FromString(ModName), FText::FromString(TargetPlatform)),
-        NSLOCTEXT("HelloNeighborMod", "PkgShort", "Mod Packaging"), NSLOCTEXT("HelloNeighborMod", "PkgShort", "Mod Task"),
-        FEditorStyle::GetBrush(TEXT("MainFrame.CookContent")),
-        [ModName, ProjectName, StageFolder, OnComplete](FString Result, double)
+    
+    FText TaskName = FText::Format(NSLOCTEXT("HelloNeighborMod", "PkgTask", "{0} ({1})"), FText::FromString(ModName), FText::FromString(TargetPlatform));
+    FText ShortName = NSLOCTEXT("HelloNeighborMod", "PkgShort", "Mod Packaging");
+    FText Description = NSLOCTEXT("HelloNeighborMod", "PkgShort", "Mod Task");
+    const FSlateBrush* Icon = DEFAULT_EDITOR_STYLE::GetBrush(TEXT("MainFrame.CookContent"));
+    
+    auto ResultCallback = [ModName, ProjectName, StageFolder, OnComplete](FString Result, double)
+    {
+        AsyncTask(ENamedThreads::GameThread, [Result, ModName, ProjectName, StageFolder, OnComplete]()
         {
-            AsyncTask(ENamedThreads::GameThread, [Result, ModName, ProjectName, StageFolder, OnComplete]()
-             {
-                 bool bSuccess = Result.Equals(TEXT("Completed"), ESearchCase::IgnoreCase) || Result.Contains(TEXT("Success"));
-                 if (bSuccess)
-                     MovePackagedFiles(ModName, ProjectName, StageFolder, OnComplete);
-                 else
-                     OnComplete.ExecuteIfBound(false, ModName, StageFolder);
-             });
-        }
+            bool bSuccess = Result.Equals(TEXT("Completed"), ESearchCase::IgnoreCase) || Result.Contains(TEXT("Success"));
+            if (bSuccess)
+                MovePackagedFiles(ModName, ProjectName, StageFolder, OnComplete);
+            else
+                OnComplete.ExecuteIfBound(false, ModName, StageFolder);
+        });
+    };
+
+#if ENGINE_MAJOR_VERSION >= 5
+    IUATHelperModule::Get().CreateUatTask(
+        CommandLine, 
+        TaskName, 
+        ShortName, 
+        Description, 
+        Icon, 
+        nullptr,
+        ResultCallback
     );
+#else
+    IUATHelperModule::Get().CreateUatTask(
+        CommandLine, 
+        TaskName, 
+        ShortName, 
+        Description, 
+        Icon, 
+        ResultCallback
+    );
+#endif
 }
 
 bool FModPackageHandler::IsModPackaged(FString ModName, FString Platform)

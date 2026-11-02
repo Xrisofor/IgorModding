@@ -41,9 +41,7 @@ FMod UModKit::FindMod(const FString& ModName) const
     for (const FMod& Mod : AllMods)
     {
         if (Mod.Name == ModName)
-        {
             return Mod;
-        }
     }
     return FMod();
 }
@@ -80,6 +78,12 @@ void UModKit::ProcessNextMod()
         PluginContentPath.LeftChopInline(1);
     AssetRegistry.ScanPathsSynchronous({ PluginContentPath }, true);
     
+    TSet<FName> NeighborClassNames;
+    {
+        const TArray<FName> RootClasses = { ASosed::StaticClass()->GetFName() };
+        AssetRegistry.GetDerivedClassNames(RootClasses, TSet<FName>(), NeighborClassNames);
+    }
+    
     FMod NewMod;
     NewMod.Name = Plugin->GetName();
     NewMod.FriendlyName = Plugin->GetDescriptor().FriendlyName;
@@ -100,7 +104,7 @@ void UModKit::ProcessNextMod()
         }
         else
         {
-            NewMod.IconBrush = FSlateNoResource(); 
+            NewMod.IconBrush.DrawAs = ESlateBrushDrawType::NoDrawType; 
             NewMod.IconBrush.ImageSize = FVector2D(128.f, 128.f);
         }
     }
@@ -110,16 +114,10 @@ void UModKit::ProcessNextMod()
     FARFilter Filter;
     Filter.PackagePaths.Add(FName(*PluginContentPath));
     Filter.bRecursivePaths = true;
-
-#if ENGINE_MAJOR_VERSION >= 5
-    Filter.ClassPaths.Add(UWorld::StaticClass()->GetClassPathName());
-    Filter.ClassPaths.Add(UBlueprint::StaticClass()->GetClassPathName());
-    Filter.ClassPaths.Add(UBlueprintGeneratedClass::StaticClass()->GetClassPathName());
-#else
+    
     Filter.ClassNames.Add(UWorld::StaticClass()->GetFName());
     Filter.ClassNames.Add(UBlueprint::StaticClass()->GetFName());
     Filter.ClassNames.Add(UBlueprintGeneratedClass::StaticClass()->GetFName());
-#endif
 
     TArray<FAssetData> ModAssets;
     AssetRegistry.GetAssets(Filter, ModAssets);
@@ -130,13 +128,8 @@ void UModKit::ProcessNextMod()
     
     for (const FAssetData& Asset : ModAssets)
     {
-#if ENGINE_MAJOR_VERSION >= 5
-        FString CurrentObjectPath = Asset.GetSoftObjectPath().ToString();
-        FName CurrentAssetClass = Asset.AssetClassPath.GetAssetName();
-#else
         FString CurrentObjectPath = Asset.ObjectPath.ToString();
         FName CurrentAssetClass = Asset.AssetClass;
-#endif
         
         UE_LOG(LogModKit, Display, TEXT("Class PackagePath=%s"), *Asset.PackagePath.ToString());
         UE_LOG(LogModKit, Display, TEXT("Asset AssetName=%s, AssetClass=%s"), *Asset.AssetName.ToString(), *CurrentAssetClass.ToString());
@@ -156,34 +149,15 @@ void UModKit::ProcessNextMod()
         }
         else if (CurrentAssetClass == NAME_Blueprint || CurrentAssetClass == NAME_BlueprintGeneratedClass)
         {
-            FString ParentClassPath;
-            bool bFoundParent = Asset.GetTagValue(FBlueprintTags::NativeParentClassPath, ParentClassPath) || 
-                                Asset.GetTagValue(FBlueprintTags::ParentClassPath, ParentClassPath);
+            const FName GeneratedClassName(*(Asset.AssetName.ToString() + TEXT("_C")));
 
-#if ENGINE_MAJOR_VERSION >= 5
-                if (!bFoundParent || ParentClassPath.IsEmpty())
-                {
-                    FSoftObjectPath SoftPath(CurrentObjectPath);
-                    TSoftClassPtr<UObject> SoftClass(SoftPath);
-                    UClass* LoadedClass = SoftClass.LoadSynchronous();
-        
-                    if (LoadedClass && LoadedClass->IsChildOf(ASosed::StaticClass()))
-                    {
-                        FModData NewNeighbor;
-                        static_cast<FMod&>(NewNeighbor) = NewMod;
-                        NewNeighbor.AssetData = Asset;
-                        AllModNeighbors.Add(NewNeighbor);
-                    }
-                }
-#else
-                if (ParentClassPath.Contains(TEXT("Sosed")))
-                {
-                    FModData NewNeighbor;
-                    static_cast<FMod&>(NewNeighbor) = NewMod; 
-                    NewNeighbor.AssetData = Asset;
-                    AllModNeighbors.Add(NewNeighbor);
-                }
-#endif
+            if (NeighborClassNames.Contains(GeneratedClassName))
+            {
+                FModData NewNeighbor;
+                static_cast<FMod&>(NewNeighbor) = NewMod;
+                NewNeighbor.AssetData = Asset;
+                AllModNeighbors.Add(NewNeighbor);
+            }
         }
     }
     

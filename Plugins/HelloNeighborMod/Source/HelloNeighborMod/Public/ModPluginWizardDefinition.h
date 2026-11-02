@@ -18,15 +18,10 @@ public:
 	virtual const TArray<TSharedRef<FPluginTemplateDescription>>& GetTemplatesSource() const override { return TemplateDefinitions; };
 	virtual void ClearTemplateSelection() override { CurrentTemplateDefinition.Reset(); };
 	virtual bool HasValidTemplateSelection() const override { return CurrentTemplateDefinition.IsValid(); };
-
-#if ENGINE_MAJOR_VERSION >= 5
-	virtual void OnTemplateSelectionChanged(TSharedPtr<FPluginTemplateDescription> InSelectedItem, ESelectInfo::Type SelectInfo) override;
-	virtual TSharedPtr<FPluginTemplateDescription> GetSelectedTemplate() const override;
-#else
+	
 	virtual void OnTemplateSelectionChanged(TArray<TSharedRef<FPluginTemplateDescription>> InSelectedItems, ESelectInfo::Type SelectInfo) override;
 	virtual TArray<TSharedPtr<FPluginTemplateDescription>> GetSelectedTemplates() const override;
 	virtual ESelectionMode::Type GetSelectionMode() const override { return ESelectionMode::Type::Multi; }
-#endif
 
 	virtual bool AllowsEnginePlugins() const { return false; };
 	virtual bool CanShowOnStartup() const override { return true; }

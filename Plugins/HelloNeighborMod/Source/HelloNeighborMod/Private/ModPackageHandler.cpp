@@ -6,45 +6,52 @@
 #include "IUATHelperModule.h"
 #include "Async/Async.h"
 #include "HAL/PlatformFileManager.h"
+#include "Misc/ConfigCacheIni.h"
 
-#include "Runtime/Launch/Resources/Version.h"
-#if ENGINE_MAJOR_VERSION >= 5
-    #include "Styling/AppStyle.h"
-    #define DEFAULT_EDITOR_STYLE FAppStyle
-#else
-    #include "EditorStyleSet.h"
-    #define DEFAULT_EDITOR_STYLE FEditorStyle
-#endif
+#include "EditorStyleSet.h"
+#define DEFAULT_EDITOR_STYLE FEditorStyle
 
 FString FModPackageHandler::GetStageFolderName(FString Platform, FString Flavor)
 {
     // (Win32, Win64, HoloLens, Mac, XboxOne, PS4, IOS, Android, HTML5, Linux, LinuxAArch64, AllDesktop, TVOS, Switch, Lumin)
-
-#if ENGINE_MAJOR_VERSION >= 5
-    if (Platform == "Win64") return TEXT("Windows");
-    if (Platform == "Linux") return TEXT("Linux");
-#else
+    
     if (Platform == "Win64") return TEXT("WindowsNoEditor");
     if (Platform == "Linux") return TEXT("LinuxNoEditor");
-#endif
     
     if (Platform == "Android") return Flavor.IsEmpty() ? TEXT("Android") : FString::Printf(TEXT("Android_%s"), *Flavor);
     return Platform;
 }
 
+FString FModPackageHandler::GetCookFlavor(const FString& Platform)
+{
+    if (Platform != TEXT("Android"))
+        return FString();
+    
+    const TCHAR* Section = TEXT("/Script/AndroidRuntimeSettings.AndroidRuntimeSettings");
+    auto IsEnabled = [Section](const TCHAR* Key)
+    {
+        bool bValue = false;
+        GConfig->GetBool(Section, Key, bValue, GEngineIni);
+        return bValue;
+    };
+    
+    if (IsEnabled(TEXT("bMultiTargetFormat_ASTC"))) return TEXT("ASTC");
+    if (IsEnabled(TEXT("bMultiTargetFormat_ETC2"))) return TEXT("ETC2");
+    if (IsEnabled(TEXT("bMultiTargetFormat_DXT")))  return TEXT("DXT");
+
+    return TEXT("ETC2");
+}
+
 void FModPackageHandler::PackageMod(FString ModName, FString TargetPlatform, FString CookFlavor, FOnPackageComplete OnComplete)
 {
 	if (!IPluginManager::Get().FindPlugin(ModName).IsValid()) return;
+    if (CookFlavor.IsEmpty()) CookFlavor = GetCookFlavor(TargetPlatform);
 
     const FString ProjectPath = FPaths::ConvertRelativePathToFull(FPaths::GetProjectFilePath());
     const FString ProjectName = FPaths::GetBaseFilename(ProjectPath);
     const FString ArchivePath = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("ModArchive") / ModName);
-
-#if ENGINE_MAJOR_VERSION >= 5
-    const FString EditorExe = TEXT("UnrealEditor-Cmd.exe");
-#else
+    
     const FString EditorExe = TEXT("UE4Editor-Cmd.exe");
-#endif
 
     FString StageFolder = GetStageFolderName(TargetPlatform, CookFlavor);
 
@@ -73,17 +80,6 @@ void FModPackageHandler::PackageMod(FString ModName, FString TargetPlatform, FSt
         });
     };
 
-#if ENGINE_MAJOR_VERSION >= 5
-    IUATHelperModule::Get().CreateUatTask(
-        CommandLine, 
-        TaskName, 
-        ShortName, 
-        Description, 
-        Icon, 
-        nullptr,
-        ResultCallback
-    );
-#else
     IUATHelperModule::Get().CreateUatTask(
         CommandLine, 
         TaskName, 
@@ -92,20 +88,13 @@ void FModPackageHandler::PackageMod(FString ModName, FString TargetPlatform, FSt
         Icon, 
         ResultCallback
     );
-#endif
 }
 
 bool FModPackageHandler::IsModPackaged(FString ModName, FString Platform)
 {
     IPlatformFile& PF = FPlatformFileManager::Get().GetPlatformFile();
     
-    FString Flavor = "";
-    if (const UHelloNeighborModSettings* Settings = UHelloNeighborModSettings::Get())
-    {
-        for (const auto& P : Settings->SupportedPlatforms)
-            if (P.PlatformName == Platform) { Flavor = P.TargetFlavor; break; }
-    }
-
+    FString Flavor = GetCookFlavor(Platform);
     FString StageFolder = GetStageFolderName(Platform, Flavor);
     FString CheckPath = FPaths::Combine(GetPackagePath(ModName), TEXT("Content"), TEXT("Paks"), StageFolder);
 	

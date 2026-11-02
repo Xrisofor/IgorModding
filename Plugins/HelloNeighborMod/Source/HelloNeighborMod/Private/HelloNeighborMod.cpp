@@ -3,7 +3,6 @@
 #include "HelloNeighborMod.h"
 
 #include "HelloNeighborModStyle.h"
-#include "HelloNeighborModSettings.h"
 #include "ModPluginWizardDefinition.h"
 #include "ModMetadataObject.h"
 #include "ModPackageHandler.h"
@@ -12,6 +11,9 @@
 #include "PropertyEditorModule.h"
 #include "IDetailsView.h"
 #include "Modules/ModuleManager.h"
+#include "PlatformInfo.h"
+#include "Interfaces/IProjectManager.h"
+#include "ProjectDescriptor.h"
 
 #include "IPluginBrowser.h"
 #include "ISourceControlOperation.h"
@@ -35,16 +37,9 @@
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Images/SImage.h"
 
-#include "Runtime/Launch/Resources/Version.h"
-#if ENGINE_MAJOR_VERSION >= 5
-	#include "Styling/AppStyle.h"
-	#define DEFAULT_EDITOR_STYLE FAppStyle
-	#define GET_EDITOR_STYLE_NAME FAppStyle::GetAppStyleSetName()
-#else
-	#include "EditorStyleSet.h"
-	#define DEFAULT_EDITOR_STYLE FEditorStyle
-	#define GET_EDITOR_STYLE_NAME FEditorStyle::GetStyleSetName()
-#endif
+#include "EditorStyleSet.h"
+#define DEFAULT_EDITOR_STYLE FEditorStyle
+#define GET_EDITOR_STYLE_NAME FEditorStyle::GetStyleSetName()
 
 #define LOCTEXT_NAMESPACE "FHelloNeighborModModule"
 
@@ -101,16 +96,13 @@ void FHelloNeighborModModule::ShutdownModule()
 void FHelloNeighborModModule::RegisterMenus()
 {
 	FToolMenuOwnerScoped OwnerScoped(this);
-	
-	FName ToolbarName = (ENGINE_MAJOR_VERSION >= 5) 
-			? "LevelEditor.LevelEditorToolBar.PlayToolBar" 
-			: "LevelEditor.LevelEditorToolBar";
 
-	UToolMenu* Toolbar = UToolMenus::Get()->ExtendMenu(ToolbarName);
+	UToolMenu* Toolbar = UToolMenus::Get()->ExtendMenu("LevelEditor.LevelEditorToolBar");
 	if (Toolbar)
 	{
 		FToolMenuSection& Section = Toolbar->FindOrAddSection("HelloNeighborMod");
 		
+		// Create Mod ToolBar Button
 		FToolMenuEntry CreateModEntry = FToolMenuEntry::InitToolBarButton(
 			"CreateModButton",
 			FUIAction(FExecuteAction::CreateRaw(this, &FHelloNeighborModModule::CreateButtonClicked)),
@@ -118,12 +110,9 @@ void FHelloNeighborModModule::RegisterMenus()
 			LOCTEXT("CreateModTooltip", "Create a new mod using templates"),
 			FSlateIcon(FHelloNeighborModStyle::Get().GetStyleSetName(), "HelloNeighborMod.CreateNewMod")
 		);
-		
-#if ENGINE_MAJOR_VERSION >= 5
-		CreateModEntry.StyleNameOverride = "CalloutToolbar";
-#endif
 		Section.AddEntry(CreateModEntry);
 		
+		// Package Mod Combo Button
 		FToolMenuEntry PackageEntry = FToolMenuEntry::InitComboButton(
 			"PackageMenu", 
 			FUIAction(),
@@ -132,14 +121,12 @@ void FHelloNeighborModModule::RegisterMenus()
 			LOCTEXT("PackageModTooltip", "Select a mod and platform to package"),
 			FSlateIcon(FHelloNeighborModStyle::Get().GetStyleSetName(), "HelloNeighborMod.PackageMod")
 		);
-
-#if ENGINE_MAJOR_VERSION >= 5
-		CreateModEntry.StyleNameOverride = "CalloutToolbar";
-#endif
 		Section.AddEntry(PackageEntry);
 		
+		// If Steam Init & Steam User Auth
 		if (SteamAPI_Init() && SteamUser()->BLoggedOn())
 		{
+			// Publication Mod Combo Button
 			FToolMenuEntry PublishEntry = FToolMenuEntry::InitComboButton(
 				"PublicationMenu", 
 				FUIAction(),
@@ -148,10 +135,7 @@ void FHelloNeighborModModule::RegisterMenus()
 				LOCTEXT("PublishModTooltip", "Upload your mods to the Workshop"),
 				FSlateIcon(FHelloNeighborModStyle::Get().GetStyleSetName(), "HelloNeighborMod.PublicationMod")
 			);
-
-#if ENGINE_MAJOR_VERSION >= 5
-			CreateModEntry.StyleNameOverride = "CalloutToolbar";
-#endif
+			
 			Section.AddEntry(PublishEntry);
 		}
 	}
@@ -188,36 +172,47 @@ TSharedRef<SWidget> FHelloNeighborModModule::GenerateModMenu(bool bIsPublishMenu
 
 void FHelloNeighborModModule::FillPlatformSubMenu(FMenuBuilder& MenuBuilder, FString ModName, bool bIsPublishMenu)
 {
-	const UHelloNeighborModSettings* Settings = GetDefault<UHelloNeighborModSettings>();
-	
-	for (const FBuildPlatform& Platform : Settings->SupportedPlatforms)
-	{
-		if (bIsPublishMenu && Platform.PlatformName.Contains(TEXT("Android"))) continue;
+	const FProjectDescriptor* Project = IProjectManager::Get().GetCurrentProject();
+	const bool bAllPlatforms = !Project || Project->TargetPlatforms.Num() == 0;
 
-		FText Label = Platform.DisplayName;
-		FText Tooltip = Platform.Tooltip;
+	for (const PlatformInfo::FPlatformInfo& Info : PlatformInfo::GetPlatformInfoArray())
+	{
+		if (Info.PlatformInfoName != Info.VanillaPlatformName) continue;
+
+		if (Info.PlatformType != EBuildTargetType::Game) continue;
+		if (!Info.bEnabledForUse) continue;
+		if (Info.SDKStatus != PlatformInfo::EPlatformSDKStatus::Installed) continue;
+
+		if (!bAllPlatforms && !Project->TargetPlatforms.Contains(Info.TargetPlatformName)) continue;
+
+		const FString UatName = Info.UBTTargetId.ToString();
+
+		if (bIsPublishMenu && UatName == TEXT("Android")) continue;
+
+		FText Label = Info.DisplayName;
+		FText Tooltip = FText::Format(LOCTEXT("BuildForPlatform", "Build for {0}"), Info.DisplayName);
 
 		if (bIsPublishMenu)
 		{
-			bool bIsPackaged = FModPackageHandler::IsModPackaged(ModName, Platform.PlatformName);
-			
-			Label = bIsPackaged ? 
-				FText::Format(LOCTEXT("UploadReady", "Upload {0}"), Platform.DisplayName) : 
-				FText::Format(LOCTEXT("BuildAndUpload", "Build & Upload {0}"), Platform.DisplayName);
-			
-			Tooltip = bIsPackaged ? 
-				LOCTEXT("UploadTip", "Files found for this platform. Ready to upload.") : 
+			const bool bIsPackaged = FModPackageHandler::IsModPackaged(ModName, UatName);
+
+			Label = bIsPackaged ?
+				FText::Format(LOCTEXT("UploadReady", "Upload {0}"), Info.DisplayName) :
+				FText::Format(LOCTEXT("BuildAndUpload", "Build & Upload {0}"), Info.DisplayName);
+
+			Tooltip = bIsPackaged ?
+				LOCTEXT("UploadTip", "Files found for this platform. Ready to upload.") :
 				LOCTEXT("BuildUploadTip", "No files found for this platform. Will build then upload.");
 		}
 
 		MenuBuilder.AddMenuEntry(
 			Label, Tooltip,
-			FSlateIcon(GET_EDITOR_STYLE_NAME, Platform.IconName),
-			FUIAction(FExecuteAction::CreateLambda([ModName, Platform, bIsPublishMenu]() {
+			FSlateIcon(GET_EDITOR_STYLE_NAME, Info.GetIconStyleName(PlatformInfo::EPlatformIconSize::Normal)),
+			FUIAction(FExecuteAction::CreateLambda([ModName, UatName, bIsPublishMenu]() {
 				if (bIsPublishMenu)
-					FModPublishHandler::Get().PublishMod(ModName, Platform.PlatformName);
+					FModPublishHandler::Get().PublishMod(ModName, UatName);
 				else
-					FModPackageHandler::PackageMod(ModName, Platform.PlatformName, Platform.TargetFlavor);
+					FModPackageHandler::PackageMod(ModName, UatName, FString());
 			}))
 		);
 	}

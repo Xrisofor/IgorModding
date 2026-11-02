@@ -7,8 +7,6 @@
 #include "Engine/DeveloperSettings.h"
 #include "HelloNeighborModSettings.generated.h"
 
-#define LOCTEXT_NAMESPACE "HelloNeighborMod"
-
 USTRUCT()
 struct FPluginTemplate
 {
@@ -28,33 +26,6 @@ public:
 	FString IconFileName;
 };
 
-USTRUCT()
-struct FBuildPlatform
-{
-	GENERATED_BODY()
-
-public:
-	UPROPERTY(EditAnywhere, meta=(ToolTip="The displayed name in the menu"))
-	FText DisplayName;
-
-	UPROPERTY(EditAnywhere, meta=(ToolTip="Hover description"))
-	FText Tooltip;
-
-	UPROPERTY(EditAnywhere, meta=(ToolTip="The name of the icon from EditorStyle (for example, Launcher.Platform_Windows)"))
-	FName IconName;
-
-	UPROPERTY(EditAnywhere, meta=(ToolTip="ID of the build platform (Win64, Linux, Android)"))
-	FString PlatformName;
-
-	UPROPERTY(EditAnywhere, meta=(ToolTip="Additional parameter (for example, ASTC for Android)"))
-	FString TargetFlavor;
-
-	FBuildPlatform() {}
-	FBuildPlatform(FText InDisplayName, FText InTooltip, FName InIconName, FString InPlatformName, FString InTargetFlavor)
-		: DisplayName(InDisplayName), Tooltip(InTooltip), IconName(InIconName), PlatformName(InPlatformName), TargetFlavor(InTargetFlavor)
-	{}
-};
-
 UCLASS(Config=Editor, DefaultConfig, meta = (DisplayName="Hello Neighbor Mod"))
 class HELLONEIGHBORMOD_API UHelloNeighborModSettings : public UDeveloperSettings
 {
@@ -72,14 +43,6 @@ public:
 		{ FText::FromString("AI Setup Map"), FText::FromString("Basic map to learn AI setup"), TEXT("AISetupMap"), TEXT("AiSetupMap128.png") }
 	};
 	
-	// Platforms
-	UPROPERTY(EditAnywhere, Config, Category="Platforms", meta=(ToolTip="List of supported platforms for the build"))
-	TArray<FBuildPlatform> SupportedPlatforms = {
-		{ LOCTEXT("Pl_Win64", "Windows (64-bit)"), LOCTEXT("Pl_Win64_T", "Build for Windows"), "Launcher.Platform_Windows", "Win64", "" },
-		{ LOCTEXT("Pl_Linux", "Linux"),  LOCTEXT("Pl_Linux_T", "Build for Linux"), "Launcher.Platform_Linux", "Linux", "" },
-		{ LOCTEXT("Pl_Android", "Android (ASTC)"), LOCTEXT("Pl_Android_T", "Build for Android"), "Launcher.Platform_Android", "Android", "ASTC" }
-	};
-	
 public:
 	static UHelloNeighborModSettings* Get() { return GetMutableDefault<UHelloNeighborModSettings>(); }
 	
@@ -94,5 +57,3 @@ public:
 	virtual FText GetSectionDescription() const override { return NSLOCTEXT("HelloNeighborMod", "HelloNeighborModDescription", "Настройки плагина Hello Neighbor Mod"); }
 #endif
 };
-
-#undef LOCTEXT_NAMESPACE

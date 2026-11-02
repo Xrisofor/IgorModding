@@ -3,6 +3,7 @@
 #include "ModPublishHandler.h"
 #include "ModPackageHandler.h"
 #include "DesktopPlatformModule.h"
+#include "Interfaces/IPluginManager.h"
 #include "Framework/Notifications/NotificationManager.h"
 #include "Misc/FileHelper.h"
 #include "HAL/FileManager.h"
@@ -131,8 +132,7 @@ void FModPublishHandler::OnItemCreated(CreateItemResult_t* pResult, bool bIOFail
 		if (PublicationNotification.IsValid()) PublicationNotification->SetCompletionState(SNotificationItem::CS_Fail);
 		return;
 	}
-
-	// Сохраняем ID в корень мода
+	
 	FString IDPath = GetModPersistentIDPath(CurrentModName);
 	if (!IDPath.IsEmpty()) FFileHelper::SaveStringToFile(FString::Printf(TEXT("%llu"), pResult->m_nPublishedFileId), *IDPath);
 

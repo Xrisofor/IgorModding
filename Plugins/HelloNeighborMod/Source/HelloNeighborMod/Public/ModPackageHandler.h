@@ -13,6 +13,8 @@ public:
 	static void PackageMod(FString ModName, FString TargetPlatform, FString CookFlavor, FOnPackageComplete OnComplete = FOnPackageComplete());
 	static FString GetStageFolderName(FString Platform, FString Flavor);
 	
+	static FString GetCookFlavor(const FString& Platform);
+	
 	static FString GetPackagePath(FString ModName) { return FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("ModPackage"), ModName); };
 	static bool IsModPackaged(FString ModName, FString Platform);
 	

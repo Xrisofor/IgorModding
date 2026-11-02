@@ -9,7 +9,6 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Serialization/JsonSerializer.h"
-#include "Features/IPluginsEditorFeature.h"
 #include "Widgets/Images/SImage.h"
 #include "Widgets/SBoxPanel.h"
 
@@ -30,36 +29,23 @@ bool FModPluginWizardDefinition::GetPluginIconPath(FString& OutIconPath) const
 	return true;
 }
 
-#if ENGINE_MAJOR_VERSION >= 5
-void FModPluginWizardDefinition::OnTemplateSelectionChanged(TSharedPtr<FPluginTemplateDescription> InSelectedItem, ESelectInfo::Type SelectInfo)
-{
-	CurrentTemplateDefinition = InSelectedItem;
-}
-
-TSharedPtr<FPluginTemplateDescription> FModPluginWizardDefinition::GetSelectedTemplate() const
-{
-	return CurrentTemplateDefinition;
-}
-#else
 void FModPluginWizardDefinition::OnTemplateSelectionChanged(TArray<TSharedRef<FPluginTemplateDescription>> InSelectedItems, ESelectInfo::Type SelectInfo)
 {
 	CurrentTemplateDefinition.Reset();
+	
 	if (InSelectedItems.Num() > 0)
-	{
 		CurrentTemplateDefinition = InSelectedItems[0];
-	}
 }
 
 TArray<TSharedPtr<FPluginTemplateDescription>> FModPluginWizardDefinition::GetSelectedTemplates() const
 {
 	TArray<TSharedPtr<FPluginTemplateDescription>> Selection;
+	
 	if (CurrentTemplateDefinition.IsValid())
-	{
 		Selection.Add(CurrentTemplateDefinition);
-	}
+	
 	return Selection;
 }
-#endif
 
 TSharedPtr<class SWidget> FModPluginWizardDefinition::GetCustomHeaderWidget()
 {
@@ -100,10 +86,10 @@ bool FModPluginWizardDefinition::GetTemplateIconPath(TSharedRef<FPluginTemplateD
 TArray<FString> FModPluginWizardDefinition::GetFoldersForSelection() const
 {
 	TArray<FString> SelectedFolders;
+	
 	if (CurrentTemplateDefinition.IsValid())
-	{
 		SelectedFolders.Add(GetFolderForTemplate(CurrentTemplateDefinition.ToSharedRef()));
-	}
+	
 	return SelectedFolders;
 }
 
@@ -137,8 +123,6 @@ void FModPluginWizardDefinition::PluginCreated(const FString& PluginName, bool b
         FString OutputString;
         TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutputString);
         if (FJsonSerializer::Serialize(JsonObject.ToSharedRef(), Writer))
-        {
             FFileHelper::SaveStringToFile(OutputString, *ProjectFilePath);
-        }
     }
 }

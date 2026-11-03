@@ -41,7 +41,6 @@ private:
 	CCallResult<FModPublishHandler, SubmitItemUpdateResult_t> CallResultItemUpdated;
 
 	FString CurrentModName;
-	FString CurrentPlatform;
 	FString CurrentPackagePath;
 	FString SelectedPreviewPath;
 	

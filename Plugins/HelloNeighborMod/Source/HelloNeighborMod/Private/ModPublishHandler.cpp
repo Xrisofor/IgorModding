@@ -13,7 +13,6 @@
 void FModPublishHandler::PublishMod(FString ModName, FString Platform)
 {
 	if (!SteamAPI_Init()) return;
-	CurrentPlatform = Platform;
 	
 	if (FModPackageHandler::IsModPackaged(ModName, Platform))
 	{
@@ -51,7 +50,7 @@ void FModPublishHandler::CreateOrUpdateItem()
 	
 	if (!IDPath.IsEmpty() && FFileHelper::LoadFileToString(SavedIDStr, *IDPath))
 	{
-		SubmitModUpdate((PublishedFileId_t)FCString::Atod(*SavedIDStr));
+		SubmitModUpdate(FCString::Strtoui64(*SavedIDStr, nullptr, 10));
 		return;
 	}
 	

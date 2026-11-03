@@ -3,22 +3,30 @@
 #include "ModPackageHandler.h"
 #include "HelloNeighborModSettings.h"
 #include "Interfaces/IPluginManager.h"
+#include "PlatformInfo.h"
+#include "EditorStyleSet.h"
 #include "IUATHelperModule.h"
 #include "Async/Async.h"
 #include "HAL/PlatformFileManager.h"
 #include "Misc/ConfigCacheIni.h"
+#include "Framework/Notifications/NotificationManager.h"
+#include "Widgets/Notifications/SNotificationList.h"
 
-#include "EditorStyleSet.h"
 #define DEFAULT_EDITOR_STYLE FEditorStyle
 
 FString FModPackageHandler::GetStageFolderName(FString Platform, FString Flavor)
 {
-    // (Win32, Win64, HoloLens, Mac, XboxOne, PS4, IOS, Android, HTML5, Linux, LinuxAArch64, AllDesktop, TVOS, Switch, Lumin)
-    
-    if (Platform == "Win64") return TEXT("WindowsNoEditor");
-    if (Platform == "Linux") return TEXT("LinuxNoEditor");
-    
-    if (Platform == "Android") return Flavor.IsEmpty() ? TEXT("Android") : FString::Printf(TEXT("Android_%s"), *Flavor);
+    const FName FlavorName = Flavor.IsEmpty() ? NAME_None : FName(*Flavor);
+
+    for (const PlatformInfo::FPlatformInfo& Info : PlatformInfo::GetPlatformInfoArray())
+    {
+        if (Info.PlatformType != EBuildTargetType::Game) continue;
+        if (Info.UBTTargetId.ToString() != Platform) continue;
+        if (Info.PlatformFlavor != FlavorName) continue;
+
+        return Info.TargetPlatformName.ToString();
+    }
+
     return Platform;
 }
 
@@ -44,20 +52,48 @@ FString FModPackageHandler::GetCookFlavor(const FString& Platform)
 
 void FModPackageHandler::PackageMod(FString ModName, FString TargetPlatform, FString CookFlavor, FOnPackageComplete OnComplete)
 {
-	if (!IPluginManager::Get().FindPlugin(ModName).IsValid()) return;
-    if (CookFlavor.IsEmpty()) CookFlavor = GetCookFlavor(TargetPlatform);
+    // Find Plugin
+    if (!IPluginManager::Get().FindPlugin(ModName).IsValid())
+    {
+        OnComplete.ExecuteIfBound(false, ModName, TargetPlatform);
+        return;
+    }
+    
+    // Find Cook Flavor (Example Android - ASTC)
+    if (CookFlavor.IsEmpty())
+        CookFlavor = GetCookFlavor(TargetPlatform);
 
     const FString ProjectPath = FPaths::ConvertRelativePathToFull(FPaths::GetProjectFilePath());
     const FString ProjectName = FPaths::GetBaseFilename(ProjectPath);
     const FString ArchivePath = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("ModArchive") / ModName);
     
+    // UE Editor CMD
     const FString EditorExe = TEXT("UE4Editor-Cmd.exe");
-
     FString StageFolder = GetStageFolderName(TargetPlatform, CookFlavor);
+    
+    // Has a release been created?
+    const FString ReleasePath = FPaths::Combine(FPaths::ProjectDir(), TEXT("Releases"), UHelloNeighborModSettings::Get()->BasedOnReleaseVersion, StageFolder);
+    if (!FPaths::DirectoryExists(ReleasePath))
+    {
+        FNotificationInfo Info(FText::Format(
+            NSLOCTEXT("HelloNeighborMod", "PkgNoRelease", "Base release not found: {0}"),
+            FText::FromString(ReleasePath)));
+        Info.ExpireDuration = 8.0f;
+        TSharedPtr<SNotificationItem> Item = FSlateNotificationManager::Get().AddNotification(Info);
+        if (Item.IsValid()) Item->SetCompletionState(SNotificationItem::CS_Fail);
 
+        OnComplete.ExecuteIfBound(false, ModName, StageFolder);
+        return;
+    }
+    
     FString PlatformArgs = FString::Printf(TEXT("-platform=%s -targetplatform=%s"), *TargetPlatform, *TargetPlatform);
     if (!CookFlavor.IsEmpty()) PlatformArgs += FString::Printf(TEXT(" -cookflavor=%s"), *CookFlavor);
 
+    // -dlcname - plugin to cook as DLC (output goes to Mods/<ModName>)
+    // -basedonreleaseversion - only assets that differ from the release are packed
+    // -DLCIncludeEngineContent - include engine assets the mod uses that are missing in the release
+    // -unversionedcookedcontent - must match the base release, otherwise the pak will not load in the game
+    // -nocompile/-nocompileeditor - C++ is already built, the mod contains content only
     const FString CommandLine = FString::Printf(
         TEXT("BuildCookRun -project=\"%s\" -noP4 -clientconfig=Development -nocompile -nocompileeditor -installed -ue4exe=%s -utf8output %s -cook -unversionedcookedcontent -pak -dlcname=\"%s\" -DLCIncludeEngineContent -basedonreleaseversion=%s -stage -archive -archivedirectory=\"%s\""),
         *ProjectPath, *EditorExe, *PlatformArgs, *ModName, *UHelloNeighborModSettings::Get()->BasedOnReleaseVersion, *ArchivePath
@@ -65,7 +101,7 @@ void FModPackageHandler::PackageMod(FString ModName, FString TargetPlatform, FSt
     
     FText TaskName = FText::Format(NSLOCTEXT("HelloNeighborMod", "PkgTask", "{0} ({1})"), FText::FromString(ModName), FText::FromString(TargetPlatform));
     FText ShortName = NSLOCTEXT("HelloNeighborMod", "PkgShort", "Mod Packaging");
-    FText Description = NSLOCTEXT("HelloNeighborMod", "PkgShort", "Mod Task");
+    FText Description = NSLOCTEXT("HelloNeighborMod", "PkgDesc", "Mod Task");
     const FSlateBrush* Icon = DEFAULT_EDITOR_STYLE::GetBrush(TEXT("MainFrame.CookContent"));
     
     auto ResultCallback = [ModName, ProjectName, StageFolder, OnComplete](FString Result, double)

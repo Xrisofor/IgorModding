@@ -73,10 +73,14 @@ bool FModPluginWizardDefinition::GetTemplateIconPath(TSharedRef<FPluginTemplateD
 	const UHelloNeighborModSettings* Settings = UHelloNeighborModSettings::Get();
 	const FString DefaultIcon = FPaths::Combine(PluginBaseDir, TEXT("Resources/Icon128.png"));
 
-	if (const FPluginTemplate* Found = Settings->FindTemplateByName(InTemplate->Name))
+	for (const FPluginTemplate& T : Settings->Templates)
 	{
-		OutIconPath = FPaths::Combine(PluginBaseDir, TEXT("Resources"), Found->IconFileName);
-		if (FPaths::FileExists(OutIconPath)) return true;
+		if (FPaths::IsSamePath(FPaths::Combine(PluginBaseDir, TEXT("Templates"), T.TemplatePath), InTemplate->OnDiskPath))
+		{
+			OutIconPath = FPaths::Combine(PluginBaseDir, TEXT("Resources"), T.IconFileName);
+			if (FPaths::FileExists(OutIconPath)) return true;
+			break;
+		}
 	}
     
 	OutIconPath = DefaultIcon;
@@ -95,13 +99,20 @@ TArray<FString> FModPluginWizardDefinition::GetFoldersForSelection() const
 
 void FModPluginWizardDefinition::PopulateTemplatesSource()
 {
-	for (const FPluginTemplate& T : UHelloNeighborModSettings::Get()->Templates)
+	TArray<FPluginTemplate> Sorted = UHelloNeighborModSettings::Get()->Templates;
+	Sorted.RemoveAll([](const FPluginTemplate& T) { return !T.bEnabled; });
+	Sorted.Sort([](const FPluginTemplate& A, const FPluginTemplate& B) { return A.SortOrder < B.SortOrder; });
+
+	for (const FPluginTemplate& T : Sorted)
 	{
+		const FString Path = FPaths::Combine(PluginBaseDir, TEXT("Templates"), T.TemplatePath);
+		if (!FPaths::DirectoryExists(Path))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("HelloNeighborMod: template '%s' skipped, folder not found: %s"), *T.TemplateId.ToString(), *Path);
+			continue;
+		}
 		TemplateDefinitions.Add(MakeShared<FPluginTemplateDescription>(
-			T.TemplateName, T.TemplateDescription,
-			FPaths::Combine(PluginBaseDir, TEXT("Templates"), T.TemplatePath),
-			true, EHostType::Runtime
-		));
+			T.TemplateName, T.TemplateDescription, Path, true, EHostType::Runtime));
 	}
 }
 

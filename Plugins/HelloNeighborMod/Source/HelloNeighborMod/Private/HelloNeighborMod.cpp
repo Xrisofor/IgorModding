@@ -10,7 +10,6 @@
 
 #include "PropertyEditorModule.h"
 #include "IDetailsView.h"
-#include "Modules/ModuleManager.h"
 #include "PlatformInfo.h"
 #include "Interfaces/IProjectManager.h"
 #include "ProjectDescriptor.h"
@@ -24,7 +23,6 @@
 #include "ToolMenus.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Interfaces/IPluginManager.h"
-#include "Framework/Docking/TabManager.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "Misc/FileHelper.h"
 #include "HAL/PlatformFileManager.h"
@@ -35,7 +33,6 @@
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Widgets/Input/SButton.h"
-#include "Widgets/Images/SImage.h"
 
 #include "EditorStyleSet.h"
 #define DEFAULT_EDITOR_STYLE FEditorStyle
@@ -51,9 +48,6 @@ void FHelloNeighborModModule::StartupModule()
 	FString AppId;
 	if (GConfig->GetString(TEXT("OnlineSubsystemSteam"), TEXT("SteamDevAppId"), AppId, GEngineIni) && !AppId.IsEmpty())
 		FFileHelper::SaveStringToFile(AppId, *GetSteamAppIdPath());
-
-	SteamAPI_Init();
-	SteamAPI_RunCallbacks();
 
 	UToolMenus::RegisterStartupCallback(
 		FSimpleMulticastDelegate::FDelegate::CreateRaw(this, &FHelloNeighborModModule::RegisterMenus));
@@ -74,6 +68,7 @@ void FHelloNeighborModModule::StartupModule()
 void FHelloNeighborModModule::ShutdownModule()
 {
 	UToolMenus::UnRegisterStartupCallback(this);
+	UToolMenus::UnregisterOwner(this);
 	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(HelloNeighborCreateNewModTabName);
 	FHelloNeighborModStyle::Shutdown();
 
@@ -82,8 +77,7 @@ void FHelloNeighborModModule::ShutdownModule()
 		FPropertyEditorModule& PropertyModule = FModuleManager::GetModuleChecked<FPropertyEditorModule>("PropertyEditor");
 		PropertyModule.UnregisterCustomClassLayout("ModMetadataObject");
 	}
-
-	SteamAPI_RunCallbacks();
+	
 	SteamAPI_Shutdown();
 	
 	IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();

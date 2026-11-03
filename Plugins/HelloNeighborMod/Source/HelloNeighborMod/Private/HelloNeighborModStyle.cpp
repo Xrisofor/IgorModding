@@ -3,7 +3,6 @@
 #include "HelloNeighborModStyle.h"
 #include "Styling/SlateStyleRegistry.h"
 #include "Framework/Application/SlateApplication.h"
-#include "Slate/SlateGameResources.h"
 #include "Interfaces/IPluginManager.h"
 
 TSharedPtr< FSlateStyleSet > FHelloNeighborModStyle::StyleInstance = NULL;
@@ -31,12 +30,8 @@ FName FHelloNeighborModStyle::GetStyleSetName()
 }
 
 #define IMAGE_BRUSH( RelativePath, ... ) FSlateImageBrush( Style->RootToContentDir( RelativePath, TEXT(".png") ), __VA_ARGS__ )
-#define BOX_BRUSH( RelativePath, ... ) FSlateBoxBrush( Style->RootToContentDir( RelativePath, TEXT(".png") ), __VA_ARGS__ )
-#define BORDER_BRUSH( RelativePath, ... ) FSlateBorderBrush( Style->RootToContentDir( RelativePath, TEXT(".png") ), __VA_ARGS__ )
-#define TTF_FONT( RelativePath, ... ) FSlateFontInfo( Style->RootToContentDir( RelativePath, TEXT(".ttf") ), __VA_ARGS__ )
-#define OTF_FONT( RelativePath, ... ) FSlateFontInfo( Style->RootToContentDir( RelativePath, TEXT(".otf") ), __VA_ARGS__ )
 
-const FVector2D Icon16x40(16.0f, 16.0f);
+const FVector2D Icon18x16(18.0f, 16.0f);
 const FVector2D Icon40x40(40.0f, 40.0f);
 const FVector2D Icon80x80(80.0f, 80.0f);
 
@@ -51,7 +46,7 @@ TSharedRef< FSlateStyleSet > FHelloNeighborModStyle::Create()
 	Style->Set("HelloNeighborMod.PackageMod", new IMAGE_BRUSH(TEXT("PackageIcon_40x"), Icon40x40));
 	Style->Set("HelloNeighborMod.PublicationMod", new IMAGE_BRUSH(TEXT("SteamIcon_40x"), Icon40x40));
 	
-	Style->Set("HelloNeighborMod.ModFolder", new IMAGE_BRUSH(TEXT("Folder"), Icon16x40));
+	Style->Set("HelloNeighborMod.ModFolder", new IMAGE_BRUSH(TEXT("Folder"), Icon18x16));
 
 	return Style;
 }

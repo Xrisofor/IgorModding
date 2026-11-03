@@ -3,10 +3,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Runtime/Launch/Resources/Version.h"
 #include "IPluginWizardDefinition.h"
 #include "PluginDescriptor.h"
-#include "Features/IPluginsEditorFeature.h"
 #include "Widgets/SNullWidget.h"
 #include "Styling/SlateTypes.h"
 

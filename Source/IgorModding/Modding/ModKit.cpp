@@ -17,23 +17,33 @@ DEFINE_LOG_CATEGORY_STATIC(LogModKit, Log, All);
 
 void UModKit::FindMods()
 {
+    if (bIsScanning)
+    {
+        UE_LOG(LogModKit, Display, TEXT("Another scan attempt was made"));
+        return;
+    }
+    
     UE_LOG(LogModKit, Display, TEXT("Finding mods..."));
-
+    bIsScanning = true;
+    
+    AllMods.Empty();
+    AllModMaps.Empty();
+    AllModNeighbors.Empty();
+    
     FString TargetDir = GetModsDirectory();
     if (!IFileManager::Get().DirectoryExists(*TargetDir))
     {
         IFileManager::Get().MakeDirectory(*TargetDir, true);
+        FinishScan(EModScanResult::Success);
         return;
     }
-
-    AllMods.Empty();
-    AllModMaps.Empty();
-    AllModNeighbors.Empty();
 
     IFileManager::Get().FindFiles(ModFoldersQueue, *(TargetDir / TEXT("*")), false, true);
     
     if (ModFoldersQueue.Num() > 0)
         ProcessNextMod();
+    else
+        FinishScan(EModScanResult::Success);
 }
 
 FMod UModKit::FindMod(const FString& ModName) const
@@ -57,8 +67,11 @@ FString UModKit::GetModsDirectory() const
 
 void UModKit::ProcessNextMod()
 {
-    if (ModFoldersQueue.Num() == 0) 
+    if (ModFoldersQueue.Num() == 0)
+    {
+        FinishScan(EModScanResult::Success);
         return;
+    }
 
     FString FolderName = ModFoldersQueue.Pop();
     TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(FolderName);
@@ -67,6 +80,9 @@ void UModKit::ProcessNextMod()
     {
         if (GetWorld())
             GetWorld()->GetTimerManager().SetTimerForNextTick(this, &UModKit::ProcessNextMod);
+        else
+            FinishScan(EModScanResult::Failed);
+        
         return;
     }
     
@@ -163,4 +179,17 @@ void UModKit::ProcessNextMod()
     
     if (GetWorld())
         GetWorld()->GetTimerManager().SetTimerForNextTick(this, &UModKit::ProcessNextMod);
+    else
+        FinishScan(EModScanResult::Failed);
+}
+
+void UModKit::FinishScan(EModScanResult Result)
+{
+    if (!bIsScanning)
+        return;
+    
+    ModFoldersQueue.Empty();
+    
+    bIsScanning = false;
+    OnModsScanCompleted.Broadcast(Result);
 }

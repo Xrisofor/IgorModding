@@ -2,44 +2,46 @@
 
 > For Unreal Engine 4.27
 
-The modification system was developed by Igor Belov.
+A modding system for Unreal Engine that reproduces the core components and plugin workflow of the Hello Neighbor mod kit, so you can create, package and run mods the same way.
+
+## Credits
+
+The original system was created by **Igor Belov** during the development of Hello Neighbor. This version is based on it, extended and substantially reworked by **Xrisofor**.
 
 ## Features
 
-> This modding system replicates the core components and plugins from the Hello Neighbor mod kit, allowing you to create and run mods in the same way.
-
-- **GameInstance** - with `ModKit` singleton accessible via `GetModKit()`.
-- **UModKit** - core mod manager class for handling mods.
-- **Hello Neighbor Mod Plugin** - base plugin for modding support.
-- **ASosed** - simple base character class, used as foundation for mods.
-- **ANeighborStart** - determines which Neighbor to spawn, allowing mod-controlled gameplay.
+- **GameInstance** - provides the `ModKit` singleton through `GetModKit()`.
+- **UModKit** - the core mod manager: scans the `Mods` folder, reads plugin metadata and icons, and collects each mod's maps and neighbors.
+- **Hello Neighbor Mod Plugin** - editor plugin for creating, packaging and publishing mods (see below).
+- **ASosed** - base character class that mods build on.
+- **ANeighborStart** - selects which Neighbor to spawn, letting mods control gameplay.
 
 <div align="center">
     <img src="Resources/GameInstance.png" /><br />
     GameInstance
 </div>
 
-## How to Compile the Game Correctly
+## Building the Game
 
-To correctly build the game with the mod system, follow these steps in **Project Launcher**:
+To build the game so that mods are detected correctly, use **Project Launcher**:
 
-1. **Create a Custom Build Profile** - give it any name you like.
-2. **Build** - choose any build type.
-3. **Cook** - package the game for `WindowsNoEditor` (recommended) and `Android (ASTC)`.
-4. In **Cook → Release / DLC / Patching Settings**:
-   - Enable **Create a release version of the game for distribution**.
-   - Set **Name of the new release to create** (recommended: `1.0`).
-   - Make sure to update this version in the `HelloNeighborMod` plugin source code as well.
-5. In **Cook → Advanced Settings**:
-   - Only enable:
-     - **Save packages without versions**
-     - **Store all content in a single file (UnrealPak)**
-   - All other options should be disabled, otherwise the built mods will not be visible in-game.
-6. **Package** - configure as desired, but it is recommended to change only **Local Directory Path**, which defines where the final build will be saved.
-7. **Archive** - disable.
-8. **Deploy** - set to **Do not deploy**.
+1. **Create a custom build profile** with any name.
+2. **Build** - any build type works.
+3. **Cook** - cook for `WindowsNoEditor` (recommended) and `Android (ASTC)`.
+4. **Cook → Release / DLC / Patching Settings**:
+    - Enable **Create a release version of the game for distribution**.
+    - Set **Name of the new release to create** (recommended: `1.0`).
+    - Use the same version in the `HelloNeighborMod` plugin settings (**Based On Release Version**).
+5. **Cook → Advanced Settings** - enable only:
+    - **Save packages without versions**
+    - **Store all content in a single file (UnrealPak)**
 
-### Example Screenshots of Project Launcher Setup
+   Leave every other option disabled, otherwise packaged mods will not appear in the game.
+6. **Package** - configure as needed. Usually it is enough to set **Local Directory Path**, where the final build will be saved.
+7. **Archive** - disabled.
+8. **Deploy** - **Do not deploy**.
+
+### Project Launcher Screenshots
 
 |                Build & Cook                  |       Release / DLC / Patching Settings       |              Advanced Settings              |         Package, Archive & Deploy          |
 |:--------------------------------------------:|:---------------------------------------------:|:-------------------------------------------:|:------------------------------------------:|
@@ -47,39 +49,39 @@ To correctly build the game with the mod system, follow these steps in **Project
 
 ## The Hello Neighbor Mod Plugin
 
-The plugin provides a comprehensive toolset for mod management, automated packaging, and Steam Workshop integration directly from the Unreal Editor toolbar.
+The plugin adds mod management, automated packaging and Steam Workshop publishing to the Unreal Editor toolbar.
 
 ### Key Features
 
-- **Create Mod** - Opens a dedicated creation wizard.
-    - Uses custom `IPluginWizardDefinition` with mod-specific templates (e.g., Empty Map, AI Setup, Test Field).
-    - Automatically handles project file cleanup to ensure mods are correctly isolated.
-    - Supports custom icons and metadata during the creation process.
+- **Create Mod** - opens a creation wizard.
+    - Built on a custom `IPluginWizardDefinition` with mod templates (Empty Map, AI Setup, Test Field, etc.).
+    - Cleans up project files so each mod stays isolated.
+    - Lets you set an icon and metadata during creation.
 
-- **Package Mod** - Automated multi-platform building system.
-    - Supports **Windows (64-bit)**, **Linux**, and **Android (ASTC)**.
-    - Uses UAT (Unreal Automation Tool) to create unversioned cooked content (DLC/Pak) based on a specific release version.
-    - Automatically moves packaged files to a dedicated `Saved/ModPackage` folder for distribution.
+- **Package Mod** - automated multi-platform packaging.
+    - Supports **Windows (64-bit)**, **Linux** and **Android (ASTC)**.
+    - Uses the Unreal Automation Tool (UAT) to produce unversioned cooked content (DLC/Pak) based on a chosen release version.
+    - Moves the result to `Saved/ModPackage`, ready for distribution.
 
-- **Upload Mod (Steam Workshop)** – Integrated publication tool.
-    - **One-Click Workflow**: If a mod isn't packaged yet, the plugin will "Build & Upload" automatically.
-    - **Metadata Sync**: Syncs Friendly Name, Description, and Icon from the plugin descriptor to the Steam Workshop item.
-    - **Persistent IDs**: Tracks Steam Workshop `PublishedFileId` via a `steam_id.txt` file inside the mod folder to handle updates seamlessly.
-    - Real-time upload progress notifications and status updates in the editor.
+- **Upload Mod (Steam Workshop)** - built-in publishing.
+    - **One click**: if the mod isn't packaged yet, the plugin builds and uploads it in one step.
+    - **Metadata sync**: Friendly Name, Description and Icon are taken from the plugin descriptor.
+    - **Persistent ID**: the Workshop `PublishedFileId` is stored in `steam_id.txt` inside the mod folder, so later uploads update the existing item.
+    - Shows upload progress and status directly in the editor.
 
-- **Edit Mod Properties** - A custom detail view to modify `uplugin` metadata.
-    - Change Friendly Name, Author, Version, and Category.
-    - **Icon Customization**: Easily swap the mod's 128x128 icon through the interface.
-    - Integrated with Source Control (Checkout) for descriptor updates.
+- **Edit Mod Properties** - a custom details view for `.uplugin` metadata.
+    - Edit Friendly Name, Author, Version and Category.
+    - Replace the 128x128 mod icon from the same window.
+    - Checks the descriptor out of Source Control before saving.
 
-- **Plugin Settings** - Located in **Project Settings → Plugins → Hello Neighbor Mod**.
-    - Define the **Based On Release Version** to match your game's build version.
-    - Customize the list of **Mod Templates** (paths and icons).
-    - Configure **Supported Platforms** and build flavors (like Android ASTC).
+- **Plugin Settings** - found in **Project Settings → Plugins → Hello Neighbor Mod**.
+    - **Based On Release Version** - must match your game's release version.
+    - **Mod Templates** - paths and icons of the available templates.
+    - **Supported Platforms** - target platforms and build flavors (e.g. Android ASTC).
 
-### Steam Workshop Integration & Setup
+### Steam Workshop Setup
 
-The plugin features an automated Steam API lifecycle management system. To enable publication features, you must configure your `DefaultEngine.ini`:
+To enable publishing, add the following to `DefaultEngine.ini`:
 
 ```ini
 [OnlineSubsystemSteam]
@@ -87,10 +89,11 @@ bEnabled=true
 SteamDevAppId=480
 ```
 
-**How it works:**
-- **Automatic Initialization**: On startup, the plugin reads `SteamDevAppId` and automatically creates a `steam_appid.txt` file in the engine's executable directory (e.g., `Engine/Binaries/Win64/`). This initializes the Steam API for the editor session.
-- **Dynamic UI**: If the `[OnlineSubsystemSteam]` section or `SteamDevAppId` is missing, the **"Upload Mod"** button and all related publication logic will be completely disabled.
-- **Clean Exit**: Upon closing the editor, the plugin ensures the Steam API is shut down correctly and the environment remains clean for standard development.
+How it works:
+
+- **Initialization**: on editor startup the plugin reads `SteamDevAppId` and creates `steam_appid.txt` next to the editor executable (e.g. `Engine/Binaries/Win64/`), which initializes the Steam API.
+- **Conditional UI**: if the `[OnlineSubsystemSteam]` section or `SteamDevAppId` is missing, the **Upload Mod** button and all publishing logic are disabled.
+- **Clean shutdown**: when the editor closes, the plugin shuts the Steam API down and leaves your environment as it was.
 
 |           Create Mod Window            |         Edit Mod Properties Window          |
 |:--------------------------------------:|:-------------------------------------------:|
